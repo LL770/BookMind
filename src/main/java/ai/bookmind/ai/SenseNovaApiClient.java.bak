@@ -1,0 +1,344 @@
+package ai.bookmind.ai;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * SenseNova API 直接调用客户端
+ * 严格按照 API 文档格式发送请求，避免 Spring AI 适配器的兼容性问题
+ * 支持 Function Calling / Tool Use
+ */
+@Component
+@Slf4j
+public class SenseNovaApiClient {
+
+    /** 工具/函数定义 */
+    public record ToolProperty(String type, String description) {}
+    public record ToolFunction(String name, String description, Map<String, Object> parameters) {}
+    public record ToolDefinition(String type, ToolFunction function) {
+        public static ToolDefinition of(String name, String description, Map<String, Object> parameters) {
+            return new ToolDefinition("function", new ToolFunction(name, description, parameters));
+        }
+    }
+
+    /** LLM 请求调用的工具 */
+    public record ToolCallRequest(String id, String type, String functionName, String functionArgs) {}
+    public record ToolCallResult(String role, String toolCallId, String content) {}
+
+    private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+
+    public SenseNovaApiClient(
+            @Value("${spring.ai.openai.base-url}") String baseUrl,
+            @Value("${spring.ai.openai.api-key}") String apiKey) {
+        this.objectMapper = new ObjectMapper();
+        this.webClient = WebClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .defaultHeader("Content-Type", "application/json")
+                .build();
+    }
+
+    /**
+     * 流式对话调用
+     */
+    public Flux<String> chatStream(List<Map<String, String>> messages, String model, double temperature) {
+        return chatStream(messages, model, temperature, null);
+    }
+
+    /**
+     * 流式对话调用（带系统提示词）
+     * 使用 Spring ServerSentEvent 类型正确解析 SSE 响应
+     */
+    public Flux<String> chatStream(List<Map<String, String>> messages, String model,
+                                    double temperature, String systemPrompt) {
+        try {
+            String requestJson = buildToolRequestJson(messages, model, temperature, systemPrompt, true, null);
+            log.debug("SenseNova 请求: model={}, messages={}", model, messages.size());
+
+            return webClient.post()
+                    .uri("/chat/completions")
+                    .bodyValue(requestJson)
+                    .accept(MediaType.TEXT_EVENT_STREAM)
+                    .retrieve()
+                    .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                    .map(ServerSentEvent::data)
+                    .filter(data -> data != null && !data.isEmpty())
+                    .map(this::parseEventData)
+                    .filter(content -> content != null && !content.isEmpty())
+                    .doOnError(e -> log.error("SenseNova API 调用失败: {}", e.getMessage()))
+                    .onErrorResume(e -> Flux.error(e));
+
+        } catch (Exception e) {
+            log.error("构建SenseNova请求失败", e);
+            return Flux.error(e);
+        }
+    }
+
+    /**
+     * 流式对话调用（带工具定义 + 历史消息）
+     */
+    public Flux<String> chatStreamWithTools(
+            List<Map<String, String>> messages, String model, double temperature,
+            String systemPrompt, List<ToolDefinition> tools) {
+        try {
+            String requestJson = buildToolRequestJson(messages, model, temperature, systemPrompt, true, tools);
+            log.debug("SenseNova 工具请求: model={}, tools={}", model, tools.size());
+
+            return webClient.post()
+                    .uri("/chat/completions")
+                    .bodyValue(requestJson)
+                    .accept(MediaType.TEXT_EVENT_STREAM)
+                    .retrieve()
+                    .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                    .map(ServerSentEvent::data)
+                    .filter(data -> data != null && !data.isEmpty())
+                    .map(this::parseEventData)
+                    .filter(content -> content != null && !content.isEmpty())
+                    .doOnError(e -> log.error("SenseNova 工具流调用失败: {}", e.getMessage()))
+                    .onErrorResume(e -> Flux.error(e));
+        } catch (Exception e) {
+            log.error("构建SenseNova工具请求失败", e);
+            return Flux.error(e);
+        }
+    }
+
+    /**
+     * 非流式对话调用（用于判断是否需要调用工具）
+     * 返回完整响应 JSON，由调用方自行解析 tool_calls
+     */
+    public String chatSyncRaw(List<Map<String, String>> messages, String model,
+                               double temperature, String systemPrompt, List<ToolDefinition> tools) {
+        try {
+            String requestJson = buildToolRequestJson(messages, model, temperature, systemPrompt, false, tools);
+            return webClient.post()
+                    .uri("/chat/completions")
+                    .bodyValue(requestJson)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        } catch (Exception e) {
+            log.error("SenseNova 同步工具调用失败: {}", e.getMessage());
+            throw new RuntimeException("AI 调用失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 解析 LLM 响应的 tool_calls
+     */
+    public List<ToolCallRequest> parseToolCalls(String responseJson) {
+        try {
+            var root = objectMapper.readTree(responseJson);
+            var choice = root.path("choices").get(0);
+            if (choice == null) return List.of();
+            var message = choice.path("message");
+            var toolCalls = message.path("tool_calls");
+            if (toolCalls.isMissingNode() || !toolCalls.isArray()) return List.of();
+
+            List<ToolCallRequest> result = new ArrayList<>();
+            for (var tc : toolCalls) {
+                result.add(new ToolCallRequest(
+                        tc.path("id").asText(),
+                        tc.path("type").asText("function"),
+                        tc.path("function").path("name").asText(),
+                        tc.path("function").path("arguments").asText()
+                ));
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("解析 tool_calls 失败: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 工具调用：第一轮同步判断 + 第二轮流式生成
+     * @return 流式最终回复
+     */
+    public Flux<String> chatWithTools(List<Map<String, String>> messages, String model, double temperature,
+                                       String systemPrompt, List<ToolDefinition> tools,
+                                       java.util.function.Function<ToolCallRequest, String> toolExecutor) {
+        // 第一轮：同步调用，判断 LLM 是否要调用工具
+        String firstResponse;
+        try {
+            firstResponse = chatSyncRaw(messages, model, temperature, systemPrompt, tools);
+        } catch (Exception e) {
+            log.warn("工具调用第一轮失败，回退到普通流式: {}", e.getMessage());
+            return chatStream(messages, model, temperature, systemPrompt);
+        }
+
+        List<ToolCallRequest> toolCalls = parseToolCalls(firstResponse);
+        if (toolCalls.isEmpty()) {
+            // LLM 没有调用工具 → 提取 content 直接流式返回
+            try {
+                var root = objectMapper.readTree(firstResponse);
+                String content = root.path("choices").get(0).path("message").path("content").asText();
+                if (content != null && !content.isEmpty()) {
+                    return Flux.just(content);
+                }
+            } catch (Exception e) {
+                log.warn("解析首轮响应失败", e);
+            }
+            // 回退到普通流式
+            return chatStream(messages, model, temperature, systemPrompt);
+        }
+
+        // 执行工具调用
+        List<Map<String, String>> toolMessages = new ArrayList<>(messages);
+        // 添加 assistant 的 tool_calls 消息
+        try {
+            var root = objectMapper.readTree(firstResponse);
+            var choiceMsg = root.path("choices").get(0).path("message");
+            Map<String, String> assistantMsg = Map.of("role", "assistant", "content",
+                    choiceMsg.path("content").asText(""));
+            toolMessages.add(assistantMsg);
+        } catch (Exception e) {
+            log.warn("解析 assistant 消息失败", e);
+        }
+
+        // 为每个 tool_call 添加结果
+        StringBuilder toolResultsSummary = new StringBuilder();
+        for (ToolCallRequest tc : toolCalls) {
+            try {
+                String result = toolExecutor.apply(tc);
+                toolResultsSummary.append("工具[").append(tc.functionName).append("] 返回:\n").append(result).append("\n\n");
+            } catch (Exception e) {
+                log.warn("执行工具失败: {}", tc.functionName, e);
+                toolResultsSummary.append("工具[").append(tc.functionName).append("] 执行失败: ").append(e.getMessage()).append("\n");
+            }
+        }
+
+        // 将工具结果作为 user 消息回传（兼容不支持原生 tool role 的模型）
+        toolMessages.add(Map.of("role", "user", "content", "工具调用结果如下，请基于这些数据回答用户的问题：\n" + toolResultsSummary.toString()));
+
+        // 第二轮：流式生成最终回答
+        return chatStream(toolMessages, model, temperature, systemPrompt);
+    }
+
+    /**
+     * 非流式对话调用（用于知识图谱等需要JSON输出的场景）
+     */
+    public String chatSync(List<Map<String, String>> messages, String model, double temperature) {
+        return chatSync(messages, model, temperature, null);
+    }
+
+    public String chatSync(List<Map<String, String>> messages, String model,
+                            double temperature, String systemPrompt) {
+        try {
+            String requestJson = buildToolRequestJson(messages, model, temperature, systemPrompt, false, null);
+
+            String response = webClient.post()
+                    .uri("/chat/completions")
+                    .bodyValue(requestJson)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            if (response == null) return null;
+
+            var root = objectMapper.readTree(response);
+            var choice = root.path("choices").get(0);
+            if (choice != null) {
+                return choice.path("message").path("content").asText(null);
+            }
+            return null;
+
+        } catch (Exception e) {
+            log.error("SenseNova 同步调用失败: {}", e.getMessage());
+            throw new RuntimeException("AI 调用失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 构建带工具定义的请求 JSON
+     */
+    private String buildToolRequestJson(List<Map<String, String>> messages, String model,
+                                         double temperature, String systemPrompt, boolean stream,
+                                         List<ToolDefinition> tools) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("model", model);
+        root.put("stream", stream);
+        root.put("temperature", temperature);
+        if (!stream) {
+            root.put("max_tokens", 4096);
+        }
+
+        ArrayNode msgsArray = objectMapper.createArrayNode();
+        if (systemPrompt != null && !systemPrompt.isEmpty()) {
+            ObjectNode sysMsg = objectMapper.createObjectNode();
+            sysMsg.put("role", "system");
+            sysMsg.put("content", systemPrompt);
+            msgsArray.add(sysMsg);
+        }
+        for (Map<String, String> msg : messages) {
+            ObjectNode msgNode = objectMapper.createObjectNode();
+            msgNode.put("role", msg.get("role"));
+            msgNode.put("content", msg.get("content"));
+            msgsArray.add(msgNode);
+        }
+        root.set("messages", msgsArray);
+
+        // 添加工具定义
+        if (tools != null && !tools.isEmpty()) {
+            ArrayNode toolsArray = objectMapper.createArrayNode();
+            for (ToolDefinition tool : tools) {
+                ObjectNode toolNode = objectMapper.createObjectNode();
+                toolNode.put("type", tool.type());
+
+                ObjectNode funcNode = objectMapper.createObjectNode();
+                funcNode.put("name", tool.function().name());
+                funcNode.put("description", tool.function().description());
+                funcNode.set("parameters", objectMapper.valueToTree(tool.function().parameters()));
+
+                toolNode.set("function", funcNode);
+                toolsArray.add(toolNode);
+            }
+            root.set("tools", toolsArray);
+        }
+
+        try {
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            throw new RuntimeException("JSON序列化失败", e);
+        }
+    }
+
+    /**
+     * 解析 SSE event data（data: 前缀已被 Spring SSE codec 剥离）
+     */
+    private String parseEventData(String json) {
+        try {
+            if (json == null || json.trim().isEmpty() || "[DONE]".equals(json.trim())) return "";
+
+            var root = objectMapper.readTree(json);
+            var choices = root.path("choices");
+            if (choices.isArray() && choices.size() > 0) {
+                var delta = choices.get(0).path("delta");
+                String content = delta.path("content").asText(null);
+                String reasoning = delta.path("reasoning_content").asText(null);
+                if (reasoning != null && !reasoning.isEmpty()) {
+                    return "<thinking>" + reasoning + "</thinking>";
+                }
+                return content != null ? content : "";
+            }
+        } catch (Exception e) {
+            log.warn("解析SSE数据失败: {}", e.getMessage());
+        }
+        return "";
+    }
+}

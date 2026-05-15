@@ -1,0 +1,150 @@
+=== 模型启动验证 2026-05-14 14:43:26 ===
+[OK] SenseNova:chat (7339ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (2310ms) deepseek-v4-flash
+[OK] SenseNova:u1 (9146ms) sensenova-u1-fast
+[OK] SenseNova:kg (3393ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (6825ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (1029ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (159ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (98ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (925ms)
+[FAIL] mcp(open-websearch) (0ms)
+[FAIL] mcp(open-library) (0ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 14:46:49 ===
+[OK] SenseNova:chat (7444ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (2242ms) deepseek-v4-flash
+[OK] SenseNova:u1 (9766ms) sensenova-u1-fast
+[OK] SenseNova:kg (2293ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (4249ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (945ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (215ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (146ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (673ms)
+[FAIL] mcp(open-websearch) (0ms)
+[FAIL] mcp(open-library) (0ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 14:48:44 ===
+[OK] SenseNova:chat (10665ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (3241ms) deepseek-v4-flash
+[OK] SenseNova:u1 (9255ms) sensenova-u1-fast
+[OK] SenseNova:kg (3407ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (6666ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (802ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (215ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (105ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (714ms)
+[FAIL] mcp(open-websearch) (0ms)
+[FAIL] mcp(open-library) (0ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 14:52:31 ===
+[SLOW] SenseNova:chat (30255ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (2603ms) deepseek-v4-flash
+[OK] SenseNova:u1 (8418ms) sensenova-u1-fast
+[OK] SenseNova:kg (4454ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (4710ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (1413ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (327ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (102ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (715ms)
+[OK] mcp(open-websearch) (535ms)
+[OK] mcp(open-library) (21128ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 14:57:42 ===
+[OK] SenseNova:chat (26507ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (3831ms) deepseek-v4-flash
+[OK] SenseNova:u1 (7783ms) sensenova-u1-fast
+[OK] SenseNova:kg (2038ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (3771ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (2319ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (210ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (91ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (610ms)
+[OK] mcp(open-websearch) (576ms)
+[OK] mcp(open-library) (14713ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 15:18:35 ===
+[OK] SenseNova:chat (29154ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (2423ms) deepseek-v4-flash
+[OK] SenseNova:u1 (9202ms) sensenova-u1-fast
+[OK] SenseNova:kg (3522ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (3762ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (2300ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (226ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (418ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[FAIL] weather(wttr.in) (2042ms)
+[OK] mcp(open-websearch) (513ms)
+[OK] mcp(open-library) (21120ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 16:56:07 ===
+[OK] SenseNova:chat (8841ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (3040ms) deepseek-v4-flash
+[OK] SenseNova:u1 (26284ms) sensenova-u1-fast
+[OK] SenseNova:kg (2324ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (4337ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (1472ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (154ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (93ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (699ms)
+[OK] mcp(open-websearch) (412ms)
+[OK] mcp(open-library) (21080ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 17:14:15 ===
+[OK] SenseNova:chat (10296ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (2514ms) deepseek-v4-flash
+[OK] SenseNova:u1 (8235ms) sensenova-u1-fast
+[OK] SenseNova:kg (4113ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (4513ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (1146ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (233ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (98ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (624ms)
+[OK] mcp(open-websearch) (397ms)
+[OK] mcp(open-library) (21080ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 17:19:37 ===
+[OK] SenseNova:chat (13203ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (2647ms) deepseek-v4-flash
+[OK] SenseNova:u1 (8981ms) sensenova-u1-fast
+[OK] SenseNova:kg (3865ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (5552ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (1840ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (144ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (90ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (675ms)
+[OK] mcp(open-websearch) (412ms)
+[OK] mcp(open-library) (21085ms)
+=== 结束 ===
+
+=== 模型启动验证 2026-05-14 18:14:11 ===
+[OK] SenseNova:chat (18171ms) sensenova-6.7-flash-lite
+[OK] SenseNova:tool (3336ms) deepseek-v4-flash
+[OK] SenseNova:u1 (10109ms) sensenova-u1-fast
+[OK] SenseNova:kg (3252ms) deepseek-v4-flash
+[OK] SiliconFlow:chat (2260ms) Qwen/Qwen3-8B
+[OK] SiliconFlow:special (1308ms) THUDM/GLM-Z1-9B-0414
+[OK] SiliconFlow:embed (166ms) BAAI/bge-m3
+[OK] SiliconFlow:rerank (95ms) BAAI/bge-reranker-v2-m3
+--- 服务验证 ---
+[OK] weather(wttr.in) (654ms)
+[OK] mcp(open-websearch) (402ms)
+[OK] mcp(open-library) (21080ms)
+=== 结束 ===
+

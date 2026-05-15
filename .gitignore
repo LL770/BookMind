@@ -1,0 +1,15 @@
+target/
+*.jar
+*.log
+node_modules/
+dist/
+.env
+deploy/.env
+**/.env
+application-local.yml
+application-local.yaml
+*.iml
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,136 @@
+spring:
+  application:
+    name: bookmind-backend
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3307/bookmind?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: '123456'
+    hikari:
+      connection-init-sql: SET time_zone = '+08:00'
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: '123456'
+
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: admin
+    password: '123456'
+
+  minio:
+    endpoint: http://127.0.0.1:9000
+    access-key: admin
+    secret-key: '12345678'
+    bucket-name: book-files
+
+  servlet:
+    multipart:
+      max-file-size: 5GB
+      max-request-size: 5GB
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      continue-on-error: true
+
+  ai:
+    # 关闭不需要的自动配置
+    autoconfigure:
+      exclude:
+        - org.springframework.ai.autoconfigure.ollama.OllamaAutoConfiguration
+        - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+
+    # SiliconFlow OpenAI 兼容接口（Key-C 对话Key作为默认）
+    openai:
+      base-url: https://api.siliconflow.cn
+      api-key: ${SILICONFLOW_KEY_CHAT:}
+      chat:
+        options:
+          temperature: 0.7
+          max-tokens: 4096
+      embedding:
+        options:
+          model: BAAI/bge-m3
+
+    vectorstore:
+      qdrant:
+        host: 127.0.0.1
+        port: 6334
+        vector-size: 1024
+
+    mcp:
+      client:
+        enabled: true
+        stdio:
+          servers-configuration: classpath:mcp-servers.json
+
+# SenseNova 配置（OpenAI 兼容）
+sensenova:
+  api:
+    base-url: https://token.sensenova.cn/v1
+    chat-key: ${SENSENOVA_API_KEY:}
+    kg-key: ${SENSENOVA_API_KEY_KG:}
+    # 各场景模型（按频率分配，省 deepseek 额度）
+    chat-model: sensenova-6.7-flash-lite     # 日常对话 1500次/5h
+    tool-model: deepseek-v4-flash            # 工具调用 150次/5h
+    kg-model: deepseek-v4-flash              # 知识图谱 150次/5h
+    ocr-model: sensenova-6.7-flash-lite      # OCR（多模态视觉）
+    u1-model: sensenova-u1-fast              # 信息图生成（独立 /v1/images/generations 接口）
+
+# SiliconFlow 配置（聊天 + 嵌入 + 重排序 + OCR）
+siliconflow:
+  api:
+    base-url: https://api.siliconflow.cn/v1
+    chat-key: ${SILICONFLOW_KEY_CHAT:}
+    embed-key: ${SILICONFLOW_KEY_EMBED:}
+    special-key: ${SILICONFLOW_KEY_SPECIAL:}
+    chat-model: Qwen/Qwen3-8B          # 主力对话/RAG/摘要
+    embed-model: BAAI/bge-m3            # 文本嵌入向量
+    special-model: THUDM/GLM-Z1-9B-0414 # 知识图谱抽取
+    rerank-model: BAAI/bge-reranker-v2-m3  # 搜索结果重排序
+    ocr-model: deepseek-ai/DeepSeek-OCR     # PDF 图片文字提取
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+spring.jackson:
+  time-zone: Asia/Shanghai
+
+logging:
+  level:
+    ai.bookmind: INFO
+    ai.bookmind.mapper: WARN
+    org.springframework.ai: WARN
+
+bookmind:
+  ai:
+    chat-provider: sensenova      # siliconflow | sensenova — 聊天 API 提供商
+  jwt:
+    secret: BookMind_JWT_Secret_Key_2026_Must_Be_256_Bits_Minimum!
+    expiration: 86400
+  upload:
+    max-size: 5120
+    allowed-types: pdf,docx,txt,epub,md
+  # 单文件上限（按格式，单位 MB。流式解析 + swap 可支撑大文件）
+  max-file-size-pdf: 500
+  max-file-size-txt: 100
+  max-file-size-md: 100
+  max-file-size-docx: 200
+  max-file-size-epub: 200
+  vector:
+    chunk-size: 500
+    chunk-overlap: 150
+  ratelimit:
+    ai-chat: 60
+    upload: 10
+    search: 100
+  qdrant:
+    http-port: 6333

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 控制台输出 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSS+08:00} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- BookMind 操作日志 → 文件 -->
+    <appender name="DATALOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>DataLog/用户操作/%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 后端运行日志 → DataLog/后端/ -->
+    <appender name="BACKENDLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>DataLog/后端/%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Spring Boot 默认日志 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="BACKENDLOG"/>
+    </root>
+
+    <!-- BookMindOperation logger → 数据日志文件 -->
+    <logger name="BookMindOperation" level="INFO" additivity="false">
+        <appender-ref ref="DATALOG"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- 应用日志级别 -->
+    <logger name="ai.bookmind" level="DEBUG"/>
+    <logger name="org.springframework.ai" level="INFO"/>
+</configuration>

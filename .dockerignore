@@ -1,0 +1,9 @@
+**/node_modules
+**/target
+**/dist
+*.log
+.git
+.gitignore
+README.md
+VERIFICATION_REPORT.md
+test_100mb.txt

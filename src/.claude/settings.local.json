@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mysql *)",
+      "Bash(mvn compile *)",
+      "Bash(taskkill -f -pid 44400)",
+      "Bash(mvn package *)",
+      "Bash(cd /tmp)",
+      "Bash(jar xf *)",
+      "Bash(javap -p '/tmp/io/qdrant/client/grpc/Points$SearchPoints.class')",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://127.0.0.1:8080/api/chat/graph/generate --data-urlencode bookId=65 -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(curl -s http://127.0.0.1:8080/api/graph/65 -H 'Authorization: Bearer __TRACKED_VAR__')",
+      "Bash(/c/Users/fantuan/AppData/Local/Programs/Python/Python312-32/python.exe -c ' *)"
+    ]
+  }
+}

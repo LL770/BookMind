@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========== 基础层（仅保留 Tailwind 的基础重置） ========== */
+@layer base {
+  html { scroll-behavior: smooth; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #D4C8B8; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #C0B0A0; }
+}
+
+/* ============================================
+   所有组件样式已迁移至 App.vue 的设计系统
+   保持此文件仅用于 Tailwind 指令
+   ============================================ */

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "open-library": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\fantuan\\Desktop\\javaweb\\rent\\scripts\\mcp-open-library-launcher.mjs"
+      ]
+    },
+    "open-websearch": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\fantuan\\Desktop\\javaweb\\rent\\frontend\\node_modules\\open-websearch\\build\\index.js"
+      ]
+    }
+  }
+}

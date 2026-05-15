@@ -226,6 +226,7 @@ const showEdgeLabels = ref(true)
 const showToolbar = ref(true)
 
 let chart = null
+let orbitTimer = null
 
 // 节点类型标签（与 DB kg_node.type 一致）
 const nodeTypeLabels = {
@@ -351,9 +352,15 @@ const renderGraph = async () => {
     id: String(node.id || idx),
     name: node.name || String(node.id || ''),
     category: node.type || node.category || 'concept',
-    symbolSize: node.symbolSize || (focusNodeId.value && String(node.id) == String(focusNodeId.value) ? 60 : 40),
+    symbolSize: node.symbolSize || (focusNodeId.value && String(node.id) == String(focusNodeId.value) ? 50 : 30),
     description: node.description || '',
+    itemStyle: { borderColor: '#fff', borderWidth: 2, shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.15)' },
   }))
+
+
+  // 节点名称查找表
+  const nodeNameMap = {}
+  nodeList.forEach(n => { nodeNameMap[n.id] = n.name })
 
   const hasLinks = links.length > 0
 
@@ -380,7 +387,6 @@ const renderGraph = async () => {
     }
 
     const labelText = link.relation || link.label || ''
-    const truncatedLabel = labelText.length > 8 ? labelText.slice(0, 7) + '…' : labelText
 
     return {
       source: src,
@@ -388,16 +394,13 @@ const renderGraph = async () => {
       value: link.value || 1,
       id: link.id,
       lineStyle: { color: '#A08970', curveness, width: 2.5, cap: 'round', opacity: 0.7 },
-      label: truncatedLabel && showEdgeLabels.value ? {
+      label: labelText && showEdgeLabels.value ? {
         show: true,
-        formatter: truncatedLabel,
-        fontSize: 10,
+        position: 'start',
+        distance: 5,
+        formatter: labelText,
+        fontSize: 9,
         color: "#6B5B4E",
-        backgroundColor: "rgba(245,240,232,0.92)",
-        padding: [2, 6],
-        borderRadius: 4,
-        borderColor: "#D4C8B8",
-        borderWidth: 0.5,
       } : { show: false },
     }
   })
@@ -411,9 +414,10 @@ const renderGraph = async () => {
             <div class="text-sm text-slate-500">${nodeTypeLabels[params.data.category] || params.data.category}</div>
             ${params.data.description ? `<div class="text-sm mt-1">${params.data.description}</div>` : ''}`
         }
-        const edge = params.data
-        const fullLabel = edge.rawRelation || edge.id || ''
-        return `<div>${edge.source} → ${edge.target}</div>${fullLabel ? `<div class="text-xs text-slate-400 mt-1">${fullLabel}</div>` : ''}`
+        const sName = nodeNameMap[edge.source] || edge.source
+        const tName = nodeNameMap[edge.target] || edge.target
+        const fullLabel = edge.id || ''
+        return `<div>${sName} → ${tName}</div>${fullLabel ? `<div class="text-xs text-slate-400 mt-1">${fullLabel}</div>` : ''}`
       },
     },
     series: [{
@@ -438,7 +442,7 @@ const renderGraph = async () => {
           return name.length > 12 ? name.slice(0, 11) + '…' : name
         },
       },
-      force: { repulsion: 500, edgeLength: 180, layoutAnimation: false, friction: 0.08 },
+      force: { repulsion: 700, edgeLength: 300, layoutAnimation: true, friction: 0.1 },
       emphasis: {
         focus: 'adjacency',
         lineStyle: { width: 4 },
@@ -451,6 +455,7 @@ const renderGraph = async () => {
 
   chart.setOption(option)
 
+
   chart.off('click')
   chart.on('click', (params) => {
     if (params.dataType === 'node') {
@@ -461,6 +466,16 @@ const renderGraph = async () => {
   })
 
   window.addEventListener('resize', handleResize)
+
+  // 力布局稳定后 → 每 3 秒微调斥力，节点持续缓慢浮动
+  clearTimeout(orbitTimer)
+  orbitTimer = setTimeout(() => {
+    if (!chart) return
+    clearInterval(chart.__gentlePerturb)
+    chart.__gentlePerturb = setInterval(() => {
+      try { chart.setOption({ series: [{ force: { repulsion: 600 + Math.random() * 300 } }] }) } catch (e) { /* ignore */ }
+    }, 3000)
+  }, 2000)
 }
 
 const handleResize = () => {
@@ -510,7 +525,11 @@ const viewRelatedNotes = async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('fullscreenchange', onFullscreenChange)
-  chart?.dispose()
+  clearTimeout(orbitTimer)
+  if (chart) {
+    clearInterval(chart.__gentlePerturb)
+    chart.dispose()
+  }
 })
 </script>
 

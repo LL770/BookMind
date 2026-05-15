@@ -1,4 +1,14 @@
 import request from './request'
+import axios from 'axios'
+
+const UPLOAD_BASE = 'https://upload.zreo.top/api'
+
+function uploadRequest() {
+  const inst = axios.create({ baseURL: UPLOAD_BASE, timeout: 180000 })
+  const token = localStorage.getItem('token')
+  if (token) inst.defaults.headers.Authorization = `Bearer ${token}`
+  return inst
+}
 
 /**
  * 认证相关 API
@@ -64,18 +74,17 @@ export const authAPI = {
  * 书籍相关 API
  */
 export const bookAPI = {
-  // 上传书籍
+  // 上传书籍（走 upload.zreo.top 隧道不限速）
   upload(formData) {
-    return request.post('/books/upload', formData, {
+    return uploadRequest().post('/books/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 180000,
     })
   },
 
-  // 上传封面
+  // 上传封面（走 upload.zreo.top 隧道不限速）
   uploadCover(bookId, file) {
     const fd = new FormData(); fd.append('file', file)
-    return request.put(`/books/${bookId}/cover`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    return uploadRequest().put(`/books/${bookId}/cover`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
   },
 
   // 获取书籍列表
@@ -114,9 +123,9 @@ export const bookAPI = {
  * 分片上传 API
  */
 export const uploadAPI = {
-  // 初始化上传会话
+  // 初始化上传会话（走 upload.zreo.top 隧道不限速）
   init(fileName, fileSize) {
-    return request.post('/upload/init', null, { params: { fileName, fileSize } })
+    return uploadRequest().post('/upload/init', null, { params: { fileName, fileSize } })
   },
 
   // 上传分片
@@ -124,7 +133,7 @@ export const uploadAPI = {
     const fd = new FormData()
     fd.append('file', file)
     fd.append('chunkIndex', chunkIndex)
-    return request.post(`/upload/${uploadId}/chunk`, fd, {
+    return uploadRequest().post(`/upload/${uploadId}/chunk`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,
     })
@@ -132,12 +141,12 @@ export const uploadAPI = {
 
   // 检查分片状态（断点续传）
   checkChunk(uploadId, chunkIndex) {
-    return request.get(`/upload/${uploadId}/chunk/${chunkIndex}/status`)
+    return uploadRequest().get(`/upload/${uploadId}/chunk/${chunkIndex}/status`)
   },
 
   // 完成上传（合并分片并创建书籍）
   complete(uploadId, params) {
-    return request.post(`/upload/${uploadId}/complete`, null, { params })
+    return uploadRequest().post(`/upload/${uploadId}/complete`, null, { params })
   },
 }
 

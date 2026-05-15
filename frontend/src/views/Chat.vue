@@ -64,8 +64,33 @@
 
         <div class="chat-scroll">
           <div class="messages-area" ref="msgContainer">
-            <SkeletonLoader v-if="loadingHistory && sessions.length > 0" type="chat-message" :count="3" />
-            <div v-else-if="messages.length === 0" class="chat-welcome">
+            <div v-if="loadingHistory && sessions.length > 0" class="loading-indicator">
+              <div class="loading-spinner"></div>
+              <p class="loading-text">加载中...</p>
+            </div>
+
+            <template v-if="messages.length > 0">
+              <div v-for="(msg, i) in messages" :key="i" class="message" :class="'message--' + msg.role">
+                <div class="message-content">
+                  <details v-if="msg.thinking" class="thinking-details">
+                    <summary class="thinking-summary">🤔 思考过程</summary>
+                    <div class="thinking-content-static">{{ msg.thinking }}</div>
+                  </details>
+                  <div v-if="msg.content" class="message-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
+                </div>
+              </div>
+              <div v-if="streaming" class="message message--assistant">
+                <div class="message-content">
+                  <details v-if="streamThinking" class="thinking-details" open>
+                    <summary class="thinking-summary">🤔 思考过程</summary>
+                    <div class="thinking-content-static">{{ streamThinking }}</div>
+                  </details>
+                  <div v-if="streamAnswer" class="message-text markdown-body" :class="{ streaming: !streamingEnded }" v-html="renderMarkdown(streamAnswer)"></div>
+                  <p v-else class="stream-placeholder">思考中...</p>
+                </div>
+              </div>
+            </template>
+            <div v-else class="chat-welcome">
               <div class="welcome-icon">
                 <svg viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <defs>
@@ -81,27 +106,6 @@
                 </svg>
               </div>
               <p class="welcome-text">{{ chatMode === 'global' ? '有什么想聊的？' : '选择书籍开始讨论' }}</p>
-            </div>
-
-            <div v-for="(msg, i) in messages" :key="i" class="message" :class="'message--' + msg.role">
-              <div class="message-content">
-                <details v-if="msg.thinking" class="thinking-details">
-                  <summary class="thinking-summary">🤔 思考过程</summary>
-                  <div class="thinking-content-static">{{ msg.thinking }}</div>
-                </details>
-                <div v-if="msg.content" class="message-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
-              </div>
-            </div>
-
-            <div v-if="streaming" class="message message--assistant">
-              <div class="message-content">
-                <details v-if="streamThinking" class="thinking-details" open>
-                  <summary class="thinking-summary">🤔 思考过程</summary>
-                  <div class="thinking-content-static">{{ streamThinking }}</div>
-                </details>
-                <div v-if="streamAnswer" class="message-text markdown-body" :class="{ streaming: !streamingEnded }" v-html="renderMarkdown(streamAnswer)"></div>
-                <p v-else class="stream-placeholder">思考中...</p>
-              </div>
             </div>
           </div>
         </div>
@@ -155,7 +159,6 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookStore, useChatStore } from '@/stores'
 import request from '@/api/request'
-import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { marked } from 'marked'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -517,6 +520,7 @@ onMounted(async () => {
   } else {
     await nextTick(); scrollToBottom()
   }
+  loadingHistory.value = false
 
   document.addEventListener('click', closeSessionMenu)
   const sbEl = document.querySelector('.sidebar-history')
@@ -559,7 +563,7 @@ onUnmounted(() => {
 .sidebar-new-chat-btn { display: flex; align-items: center; gap: 8px; margin: 4px 8px 8px; padding: 8px 12px; background: rgba(198,123,92,0.1); border: 1px dashed rgba(198,123,92,0.3); border-radius: 10px; cursor: pointer; font-size: 13px; color: var(--accent-terracotta); transition: all 0.2s; }
 .sidebar-new-chat-btn:hover { background: rgba(198,123,92,0.18); }
 .sidebar-new-chat-btn svg { flex-shrink: 0; color: var(--accent-terracotta); }
-.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg-paper); }
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-paper); }
 .chat-header { display: flex; align-items: center; padding: 8px 16px; background: var(--bg-cream); border-bottom: 1px solid var(--border-light); flex-shrink: 0; }
 .chat-header-left { display: flex; gap: 2px; margin-right: auto; }
 .chat-header-center { flex: 1; display: flex; justify-content: center; }
@@ -581,6 +585,8 @@ onUnmounted(() => {
 .chat-welcome { text-align: center; padding: 60px 20px; color: var(--text-muted); }
 .welcome-icon { margin-bottom: 16px; display: flex; align-items: center; justify-content: center; }
 .welcome-icon svg { width: 100px; height: 60px; }
+.loading-indicator { text-align: center; padding: 40px 0; }
+.loading-text { color: var(--text-muted); font-size: 13px; margin-top: 8px; }
 .loading-spinner { width: 32px; height: 32px; margin: 0 auto 12px; border: 3px solid var(--border-light); border-top-color: var(--accent-terracotta); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .message { display: flex; gap: 12px; max-width: 85%; }
@@ -662,7 +668,7 @@ html.dark .message--assistant .message-text { box-shadow: 0 1px 3px rgba(0,0,0,0
   .messages-area { padding: 8px; }
   .msg-wrap { padding: 6px 0; }
   .msg-bubble { max-width: 92%; padding: 8px 12px; font-size: 14px; }
-  .input-area { padding: 6px 8px 62px; gap: 4px; }
+  .input-area { padding: 6px 8px calc(8px + env(safe-area-inset-bottom)); gap: 4px; }
   .input-row { gap: 4px; }
   .input-area textarea { font-size: 14px; padding: 6px 10px; min-height: 36px; }
   .send-btn { width: 36px; height: 36px; }

@@ -11,12 +11,10 @@
         <span class="toolbar-title">{{ chapter?.title || '加载中...' }}</span>
       </div>
       <div class="toolbar-right">
-        <span class="toolbar-chapter">
-          <span class="page-jump-wrap">
-            <input v-model="pageJumpInput" @keydown.enter="jumpToPage" type="number" min="1" :max="totalChapters"
-              class="page-jump-input" title="输入页码跳转" />
-            <span class="page-total">/ {{ totalChapters }} 页</span>
-          </span>
+        <span class="nav-info">
+          <input v-model="pageJumpInput" @keydown.enter="jumpToPage" @blur="jumpToPage"
+            class="page-jump-input" :placeholder="String(currentChapterNumber)" />
+          / {{ totalChapters }} 页
         </span>
         <button @click="showSettings = !showSettings" class="toolbar-btn" title="阅读设置">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.32 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -92,12 +90,14 @@
     <div class="reader-body">
       <!-- 左侧：章节内容 -->
       <article class="reader-content" ref="contentRef" @mouseup.prevent="handleTextSelection" @touchend.prevent="handleTextSelection" @contextmenu.prevent>
-        <div v-if="loading" class="content-skeleton">
+        <!-- 首次加载骨架屏 -->
+        <div v-if="loading && !chapter" class="content-skeleton">
           <div class="skeleton" style="height:28px;width:60%;margin-bottom:24px"></div>
           <div v-for="i in 8" :key="i" class="skeleton" :style="{ height: '14px', width: (60 + Math.random() * 35) + '%', marginBottom: '16px' }"></div>
         </div>
 
-        <template v-else-if="chapter?.content">
+        <template v-if="chapter?.content">
+          <div v-if="loading && chapter" class="content-loading-overlay"><div class="spinner-mini"></div></div>
           <h1 class="chapter-title">{{ chapter.title }}</h1>
           <div class="chapter-body" @touchend="handleTextSelection">
             <p
@@ -111,7 +111,7 @@
           </div>
         </template>
 
-        <div v-else class="content-empty">
+        <div v-else-if="!loading" class="content-empty">
           <p>暂无内容</p>
         </div>
 
@@ -121,7 +121,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             上一页
           </button>
-          <span class="nav-info">{{ currentChapterNumber }} / {{ totalChapters }} 页</span>
+          <span class="nav-info-bottom">{{ currentChapterNumber }} / {{ totalChapters }} 页</span>
           <button @click="goToNext" :disabled="currentChapterNumber >= totalChapters" class="btn btn--ghost btn-nav" :class="{ 'btn--hidden': currentChapterNumber >= totalChapters }">
             下一页
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -130,7 +130,7 @@
       </article>
 
       <!-- 右侧：笔记面板（工具栏图标控制开关） -->
-      <div class="sidebar-wrap" v-if="showSidebar && !isFullscreen">
+      <div class="sidebar-wrap" v-if="showSidebar">
         <aside class="reader-sidebar">
         <div class="sidebar-header">
           <div class="sidebar-tabs">
@@ -430,17 +430,23 @@ async function loadAnnotations() {
     }
   } catch (e) { console.error(e) }
 
-  // 2. 加载全书章节列表（用于 chapterId → chapterNumber 映射）
-  try {
-    const res = await axios.get(`/api/books/${props.bookId}/chapters`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    })
-    if (res.data.code === 0) {
-      const map = {}
-      ;(res.data.data || []).forEach(ch => { map[ch.id] = ch.chapterNumber })
-      chapterMap.value = map
-    }
-  } catch (e) { /* ignore */ }
+  // 2. 加载全书章节列表（用于 chapterId → chapterNumber 映射），缓存复用
+  const cachedList = chapterListCache.get(props.bookId)
+  if (cachedList) {
+    chapterMap.value = cachedList
+  } else {
+    try {
+      const res = await axios.get(`/api/books/${props.bookId}/chapters`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      })
+      if (res.data.code === 0) {
+        const map = {}
+        ;(res.data.data || []).forEach(ch => { map[ch.id] = ch.chapterNumber })
+        chapterMap.value = map
+        chapterListCache.set(props.bookId, map)
+      }
+    } catch (e) { /* ignore */ }
+  }
 
   // 3. 加载全书所有笔记（PaginatedResult，数据在 res.data.data.records）
   try {
@@ -496,7 +502,11 @@ const readProgressPercent = computed(() => {
 
 const paragraphs = computed(() => {
   if (!chapter.value?.content) return []
-  return chapter.value.content.split('\n\n').filter(p => p.trim()).map(p => p.trim())
+  let parts = chapter.value.content.split('\n\n').filter(p => p.trim())
+  if (parts.length <= 1) {
+    parts = chapter.value.content.split('\n').filter(p => p.trim())
+  }
+  return parts.map(p => p.trim())
 })
 
 // ========== 阅读进度持久化 ==========
@@ -506,7 +516,11 @@ function saveReadProgress() {
   if (!props.bookId || !currentChapterNumber.value) return Promise.resolve()
   if (!totalChapters.value && !_persistedTotal) return Promise.resolve()
   updateScrollPercent()
-  const overallPos = (currentChapterNumber.value - 1) + (scrollPercent.value / 100)
+  let overallPos = (currentChapterNumber.value - 1) + (scrollPercent.value / 100)
+  // 单章书：内容可见即视为已读
+  if ((totalChapters.value || _persistedTotal) === 1 && chapter.value) {
+    overallPos = 1.0
+  }
   return axios.put(`/api/reader/${props.bookId}/progress`, {}, {
     params: {
       chapterNumber: currentChapterNumber.value,
@@ -526,6 +540,7 @@ function stopAutoSave() {
 }
 
 const chapterCache = new Map()
+const chapterListCache = new Map()
 
 function restoreScrollPosition() {
   const el = contentRef.value
@@ -580,30 +595,42 @@ async function preloadChapter(chapterNum) {
 }
 async function preloadAdjacentChapters() {
   const n = currentChapterNumber.value
-  if (!hasNext.value) { preloadChapter(n - 1); return }
-  if (!hasPrev.value) { preloadChapter(n + 1); return }
-  // 同时预加载上一页和下一页
-  preloadChapter(n - 1)
-  preloadChapter(n + 1)
+  const max = totalChapters.value || 999
+  for (let i = 1; i <= 5; i++) {
+    if (n - i >= 1) preloadChapter(n - i)
+    if (n + i <= max) preloadChapter(n + i)
+  }
 }
 
 // ========== 导航 ==========
 
-function goToPrev() {
-  if (hasPrev.value) {
+let navLock = false
+
+async function goToPrev() {
+  if (!hasPrev.value || navLock) return
+  navLock = true
+  try {
+    const prevCh = currentChapterNumber.value - 1
+    const cacheKey = props.bookId + ':' + prevCh
+    if (!chapterCache.has(cacheKey)) await preloadChapter(prevCh)
     saveReadProgress()
-    router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: currentChapterNumber.value - 1 } })
-  }
+    await router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: prevCh } })
+  } finally { navLock = false }
 }
-function goToNext() {
-  if (hasNext.value) {
+async function goToNext() {
+  if (!hasNext.value || navLock) return
+  navLock = true
+  try {
+    const nextCh = currentChapterNumber.value + 1
+    const cacheKey = props.bookId + ':' + nextCh
+    if (!chapterCache.has(cacheKey)) await preloadChapter(nextCh)
     saveReadProgress()
-    router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: currentChapterNumber.value + 1 } })
-  }
+    await router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: nextCh } })
+  } finally { navLock = false }
 }
 
-async function goHome() {
-  await saveReadProgress()
+function goHome() {
+  saveReadProgress()
   router.push({ name: 'home' })
 }
 function handleParaClick(idx) {
@@ -713,6 +740,8 @@ function onClickOutside(e) {
 
 // ========== 生命周期 ==========
 
+function onFullscreenChange() { isFullscreen.value = !!document.fullscreenElement }
+
 onMounted(() => {
   loadChapter()
   startAutoSave()          // 阅读中每 5s 自动存进度
@@ -722,6 +751,7 @@ onMounted(() => {
   if (contentEl) contentEl.addEventListener('scroll', updateScrollPercent, { passive: true })
   document.addEventListener('mouseup', onClickOutside)
   document.documentElement.classList.add('reader-active')
+  document.addEventListener('fullscreenchange', onFullscreenChange)
   // 禁止浏览器右键菜单
   if (readerRootRef.value) {
     readerRootRef.value.oncontextmenu = (e) => { e.preventDefault(); return false }
@@ -747,6 +777,7 @@ onBeforeUnmount(() => {
   stopAutoSave()
   window.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mouseup', onClickOutside)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
   const contentEl = contentRef.value
   if (contentEl) contentEl.removeEventListener('scroll', updateScrollPercent)
   document.documentElement.classList.remove('reader-active')
@@ -791,13 +822,18 @@ onBeforeUnmount(() => {
 .toolbar-chapter { font-size: 12px; color: var(--text-muted); }
 .page-jump-wrap { display: inline-flex; align-items: center; gap: 4px; }
 .page-jump-input {
-  width: 40px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-light);
+  width: auto; min-width: 3ch; max-width: 6ch; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border-light);
   font-size: 12px; text-align: center; background: var(--bg-cream); color: var(--text-primary);
   outline: none; transition: border-color 0.2s;
 }
 .page-jump-input:focus { border-color: var(--accent-terracotta); }
 .page-jump-input::-webkit-inner-spin-button { display: none; }
 .page-total { font-size: 12px; color: var(--text-muted); }
+.nav-info {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-muted); margin-right: 8px;
+}
+.nav-info-bottom { font-size: 12px; color: var(--text-muted); }
 .toolbar-btn {
   width: 32px; height: 32px; border-radius: 8px; border: none;
   background: none; cursor: pointer; color: var(--text-secondary);
@@ -805,6 +841,19 @@ onBeforeUnmount(() => {
   transition: all 0.2s;
 }
 .toolbar-btn:hover { background: rgba(200,180,160,0.25); color: var(--text-primary); }
+
+/* 翻页加载遮罩 */
+.content-loading-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.3); pointer-events: none;
+}
+.spinner-mini {
+  width: 20px; height: 20px; border: 2px solid var(--border-light);
+  border-top-color: var(--accent-terracotta); border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* 阅读进度条 */
 .reader-progress-bar { height: 3px; background: var(--border-light); flex-shrink: 0; }

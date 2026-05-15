@@ -69,7 +69,7 @@
               <p class="loading-text">加载中...</p>
             </div>
 
-            <template v-if="messages.length > 0">
+            <template v-else-if="messages.length > 0">
               <div v-for="(msg, i) in messages" :key="i" class="message" :class="'message--' + msg.role">
                 <div class="message-content">
                   <details v-if="msg.thinking" class="thinking-details">
@@ -285,6 +285,7 @@ const switchSession = async (sid) => {
   const key = curMode() + ':' + sid
   if (sessionCache[key]) {
     messages.value = sessionCache[key]
+    loadingHistory.value = false
     await nextTick(); scrollToBottom()
     return
   }

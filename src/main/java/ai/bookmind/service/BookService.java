@@ -89,10 +89,10 @@ public class BookService {
         Integer noteCount = noteMapper.countByBookId(book.getId());
         book.setTotalNotes(noteCount);
 
-        // 阅读进度：Redis → MySQL book.progress 兜底
+        // 阅读进度：Redis → MySQL book.reading_progress 兜底
         Integer progress = readingStatsService.getProgress(userId, book.getId());
         if (progress == null || progress == 0) {
-            progress = book.getProgress() != null ? book.getProgress() : 0;
+            progress = book.getReadingProgress() != null ? book.getReadingProgress() : 0;
         }
         book.setReadProgress(progress);
     }

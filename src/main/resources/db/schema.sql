@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS `book` (
     `total_words` INT DEFAULT NULL COMMENT '总字数',
     `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态: 0-上传中 1-解析中 2-向量化中 3-已完成 4-失败',
     `progress` INT DEFAULT 0 COMMENT '处理进度(0-100)',
+    `reading_progress` INT DEFAULT 0 COMMENT '阅读进度(0-100)',
     `process_message` VARCHAR(500) DEFAULT NULL COMMENT '处理描述',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -68,7 +69,8 @@ CREATE TABLE IF NOT EXISTS `chapter` (
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     INDEX `idx_book_id` (`book_id`),
     INDEX `idx_chapter_number` (`book_id`, `chapter_number`),
-    INDEX `idx_vector_id` (`vector_id`)
+    INDEX `idx_vector_id` (`vector_id`),
+    FULLTEXT INDEX `ft_content` (`content`) WITH PARSER ngram
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='章节表';
 
 -- ============================================

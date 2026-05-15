@@ -42,7 +42,7 @@
           <span class="sidebar-label">退出</span>
         </button>
         <button @click="toggleSidebar()" class="sidebar-collapse-btn" :title="sidebarState === 2 ? '展开导航栏' : '隐藏导航栏'">
-          <span class="collapse-arrow">{{ sidebarState === 2 ? (sidebarDefault === 0 ? '❯' : '>') : (sidebarDefault === 0 ? '❮' : '<') }}</span>
+          <span class="collapse-arrow">{{ sidebarState === 2 ? '>' : '<' }}</span>
           <span v-if="sidebarDefault === 0" class="sidebar-collapse-label">{{ sidebarState === 2 ? '展开' : '隐藏' }}</span>
         </button>
       </div>
@@ -97,7 +97,7 @@
     <main class="main-content">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
-          <keep-alive :include="['Home', 'Chat']">
+          <keep-alive :include="['Chat']">
             <component :is="Component" />
           </keep-alive>
         </transition>
@@ -127,6 +127,9 @@ onMounted(() => {
     sidebarDefault.value = e.detail
     sidebarState.value = e.detail
     localStorage.setItem('sidebar_state', String(e.detail))
+  })
+  window.addEventListener('sidebar-state-changed', (e) => {
+    sidebarState.value = e.detail
   })
   // 移动端：触发浏览器地址栏自动隐藏
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
@@ -246,25 +249,24 @@ html.dark .app-root { background: var(--bg-cream); }
   height: 100vh; position: sticky; top: 0;
 }
 .sidebar-brand {
-  display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px;
+  display: flex; align-items: center; gap: 6px; padding: 10px 16px 10px 9px;
   text-decoration: none; border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 .sidebar-brand .brand-icon { font-size: 16px; flex-shrink: 0; }
 .sidebar-brand .brand-text {
-  font-family: var(--font-heading); font-size: 14px; font-weight: 700;
-  color: var(--text-primary); letter-spacing: 0.3px; line-height: 1.15;
-  width: 34px; flex: none;
+  font-family: var(--font-heading); font-size: 13px; font-weight: 700;
+  color: var(--text-primary); letter-spacing: 0.3px; line-height: 1.2;
 }
-.sidebar-brand .brand-sub { display: block; font-size: 13px; font-weight: 700; text-align: right; width: 100%; }
-.sidebar-links { flex: 1; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+.sidebar-brand .brand-sub { display: block; font-weight: 700; }
+.sidebar-links { flex: 1; overflow-y: auto; padding: 6px 0; display: flex; flex-direction: column; gap: 2px; }
 .sidebar-footer {
   border-top: 1px solid var(--border-light); flex-shrink: 0;
-  display: flex; flex-direction: column; gap: 2px; padding: 6px 8px;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px 0;
   position: relative;
 }
 .sidebar-link--slim {
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  display: flex; align-items: center; gap: 10px; padding: 7px 12px;
   border-radius: var(--radius-sm); text-decoration: none;
   font-size: 12px; font-weight: 500; color: var(--text-secondary);
   transition: all 0.2s; cursor: pointer; background: none; border: none; width: 100%; text-align: left;
@@ -273,7 +275,7 @@ html.dark .app-root { background: var(--bg-cream); }
 .sidebar-link--slim:last-of-type:hover { color: var(--accent-rose); }
 .sidebar-collapse-btn {
   background: none; border: none; cursor: pointer;
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  display: flex; align-items: center; gap: 10px; padding: 7px 12px;
   border-radius: var(--radius-sm); font-size: 12px; font-weight: 500;
   color: var(--text-muted); transition: all 0.2s;
   font-family: var(--font-body); width: 100%; text-align: left;
@@ -283,18 +285,18 @@ html.dark .app-root { background: var(--bg-cream); }
 .sidebar-collapse-label { white-space: nowrap; }
 
 /* 侧边栏状态：0=展开 1=仅图标 2=隐藏 */
-.sidebar-state-1 { grid-template-columns: 60px 1fr; }
+.sidebar-state-1 { grid-template-columns: 44px 1fr; }
 .sidebar-state-1 .sidebar-brand .brand-text,
 .sidebar-state-1 .sidebar-label { display: none; }
-.sidebar-state-1 .sidebar-brand { justify-content: center; padding: 14px 0; }
-.sidebar-state-1 .sidebar-link { justify-content: center; padding: 8px 0; }
+.sidebar-state-1 .sidebar-brand { justify-content: center; padding: 12px 0; }
+.sidebar-state-1 .sidebar-link { justify-content: center; padding: 6px 0; }
 .sidebar-state-1 .sidebar-footer { align-items: center; }
 .sidebar-state-1 .sidebar-link--slim .sidebar-label { display: none; }
-.sidebar-state-1 .sidebar-link--slim { justify-content: center; }
-.sidebar-state-1 .sidebar-collapse-btn { justify-content: center; padding: 8px 0; }
+.sidebar-state-1 .sidebar-link--slim { justify-content: center; padding: 6px 0; }
+.sidebar-state-1 .sidebar-collapse-btn { justify-content: center; padding: 6px 0; }
 .sidebar-state-1 .sidebar-collapse-label { display: none; }
 .sidebar-state-1 .sidebar-collapse-btn svg { transform: none; }
-.sidebar-state-1 .collapse-arrow { font-size: 18px; }
+.sidebar-state-1 .collapse-arrow { font-size: 16px; }
 
 .sidebar-state-2 { grid-template-columns: 1fr; }
 .sidebar-state-2 .sidebar { display: none; }
@@ -309,7 +311,7 @@ html.dark .app-root { background: var(--bg-cream); }
 }
 .sidebar-state-2 .sidebar-reveal:hover { opacity: 1; color: var(--accent-terracotta); }
 .sidebar-link {
-  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-radius: var(--radius-sm); text-decoration: none;
   font-size: 13px; font-weight: 500; color: var(--text-secondary);
   transition: all 0.2s; cursor: pointer;
@@ -317,7 +319,7 @@ html.dark .app-root { background: var(--bg-cream); }
 }
 .sidebar-link:hover { background: rgba(200,180,160,0.25); color: var(--text-primary); }
 .sidebar-link--active { background: rgba(198,123,92,0.15); color: var(--accent-terracotta); }
-.sidebar-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-icon { width: 20px; height: 20px; flex-shrink: 0; }
 .sidebar-label { opacity: 1; transition: opacity 0.2s; }
 
 /* 阅读/全屏时隐藏侧边栏，并让内容占满宽度 */

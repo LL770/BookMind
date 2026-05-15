@@ -235,7 +235,10 @@ const bookStore = useBookStore()
 const catStore = useCategoryStore()
 
 const activeCategory = ref('all')
-const showSidebar = ref(false)
+const showSidebar = ref(localStorage.getItem('home_show_sidebar') === 'true')
+watch(showSidebar, v => localStorage.setItem('home_show_sidebar', v))
+const catExpanded = ref(localStorage.getItem('home_cat_expanded') === 'true')
+watch(catExpanded, v => localStorage.setItem('home_cat_expanded', v))
 const catRenderKey = ref(0)
 const batchMode = ref(false)
 const selectedIds = ref(new Set())
@@ -268,7 +271,6 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const showCategoryEditor = ref(false)
 const newCatName = ref('')
-const catExpanded = ref(false)
 const catEmojiOpen = ref(false)
 const catMenuId = ref(null)
 const renameVal = ref('')
@@ -533,8 +535,6 @@ onMounted(() => {
     localStorage.removeItem('bookmind_hidden_categories')
     hiddenCategories.value = []
   }
-  loadApiCategories()
-  loadBooks()
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.cat-sidebar') && !e.target.closest('.modal-overlay')) {
       closeSideMenus()
@@ -547,6 +547,8 @@ onMounted(() => {
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') debouncedCatLoad() })
   window.addEventListener('focus', debouncedCatLoad)
+  loadApiCategories()
+  loadBooks()
 })
 </script>
 

@@ -37,6 +37,13 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
+        <div class="setting-row">
+          <span class="setting-label">侧边栏</span>
+          <div class="setting-options">
+            <button @click="setSidebar(0)" class="option-btn" :class="{ 'option-btn--active': sidebarState === 0 }">展开</button>
+            <button @click="setSidebar(1)" class="option-btn" :class="{ 'option-btn--active': sidebarState === 1 }">图标</button>
+          </div>
+        </div>
       </div>
 
 
@@ -71,13 +78,20 @@
       <!-- 修改密码 -->
       <div class="card settings-card">
         <h2 class="card-title">修改密码</h2>
-        <div class="form-stack">
-          <input v-model="pw.old" type="password" class="input" placeholder="旧密码" />
-          <input v-model="pw.newVal" type="password" class="input" placeholder="新密码" />
-          <input v-model="pw.confirm" type="password" class="input" placeholder="确认新密码" />
-          <p v-if="pwError" class="form-error">{{ pwError }}</p>
-          <button @click="changePw" class="btn btn--primary btn-sm">修改密码</button>
+        <div class="pw-row">
+          <label class="pw-label">旧密码</label>
+          <input v-model="pw.old" type="password" class="input" placeholder="输入旧密码" />
         </div>
+        <div class="pw-row">
+          <label class="pw-label">新密码</label>
+          <input v-model="pw.newVal" type="password" class="input" placeholder="至少6位" />
+        </div>
+        <div class="pw-row">
+          <label class="pw-label">确认密码</label>
+          <input v-model="pw.confirm" type="password" class="input" placeholder="再次输入新密码" />
+        </div>
+        <p v-if="pwError" class="form-error">{{ pwError }}</p>
+        <button @click="changePw" class="btn btn--primary" style="margin-top:12px;width:100%">修改密码</button>
       </div>
 
       <!-- 退出登录 (桌面端侧边栏已有, 仅移动端显示) -->
@@ -116,6 +130,7 @@ const form = ref({ username: '', phone: '' })
 const pw = ref({ old: '', newVal: '', confirm: '' })
 const pwError = ref('')
 const darkMode = ref(document.documentElement.classList.contains('dark'))
+const sidebarState = ref(parseInt(localStorage.getItem('sidebar_state') ?? '0'))
 
 function toggleDarkMode() {
   if (darkMode.value) {
@@ -125,6 +140,12 @@ function toggleDarkMode() {
     document.documentElement.classList.remove('dark')
     localStorage.setItem('dark_mode', '0')
   }
+}
+
+function setSidebar(state) {
+  sidebarState.value = state
+  localStorage.setItem('sidebar_state', String(state))
+  window.dispatchEvent(new CustomEvent('sidebar-state-changed', { detail: state }))
 }
 
 const userInitial = computed(() => (userStore.user?.username || 'U')[0].toUpperCase())
@@ -251,15 +272,26 @@ async function handleLogout() {
 .info-value input { flex:1; min-width:160px; }
 
 /* 密码 */
-.form-stack { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin: 0 auto; }
-.form-error { font-size: 12px; color: var(--accent-rose); }
+.pw-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.pw-row + .pw-row { border-top: 1px solid var(--border-light); }
+.pw-label { font-size: 14px; color: var(--text-primary); min-width: 72px; flex-shrink: 0; }
+.pw-row .input { flex: 1; border-radius: var(--radius-md); }
+.form-error { font-size: 12px; color: var(--accent-rose); margin-top: 4px; }
 .danger-text { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
 
 /* 设置行（置顶等） */
 .setting-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+.setting-row + .setting-row { border-top: 1px solid var(--border-light); }
 .setting-info { display: flex; flex-direction: column; gap: 2px; }
 .setting-label { font-size: 14px; font-weight: 500; color: var(--text-primary); }
 .setting-desc { font-size: 12px; color: var(--text-muted); }
+.setting-options { display: flex; gap: 6px; }
+.option-btn {
+  padding: 4px 14px; border-radius: 16px; border: 1px solid var(--border-medium);
+  font-size: 13px; background: transparent; color: var(--text-secondary); cursor: pointer; transition: all 0.2s;
+}
+.option-btn:hover { border-color: var(--accent-terracotta); color: var(--accent-terracotta); }
+.option-btn--active { background: var(--accent-terracotta); color: #fff; border-color: var(--accent-terracotta); }
 /* 切换开关 */
 .toggle { position: relative; cursor: pointer; }
 .toggle input { display: none; }

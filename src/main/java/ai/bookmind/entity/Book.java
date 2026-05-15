@@ -53,6 +53,9 @@ public class Book {
     /** 处理进度（0-100） */
     private Integer progress;
 
+    /** 阅读进度 0-100（持久化字段，供 Redis 兜底） */
+    private Integer readingProgress;
+
     /** 处理描述 */
     private String processMessage;
 

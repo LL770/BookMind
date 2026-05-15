@@ -35,9 +35,7 @@ spring:
 
   sql:
     init:
-      mode: always
-      schema-locations: classpath:db/schema.sql
-      continue-on-error: true
+      mode: never
 
   ai:
     # 关闭不需要的自动配置

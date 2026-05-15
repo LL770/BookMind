@@ -13,3 +13,7 @@ application-local.yaml
 .vscode/
 .DS_Store
 Thumbs.db
+DataLog/
+logs/
+frontend/dist.zip
+frontend/frontend.err

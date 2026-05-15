@@ -32,7 +32,7 @@ public class ReaderService {
     private static final String CHAPTER_CACHE_PREFIX = "chapter:content:";
     private static final long CHAPTER_CACHE_TTL = 7200; // 2小时，正常阅读会话足够
     // 预拉取个数（当前章后连续预取）
-    private static final int PREWARM_COUNT = 3;
+    private static final int PREWARM_COUNT = 5;
 
     /** 从 Redis 取缓存章节，null 表示未命中 */
     private Chapter getCachedChapter(Long bookId, Integer chapterNumber) {
@@ -49,27 +49,35 @@ public class ReaderService {
         redisTemplate.opsForValue().set(key, chapter, CHAPTER_CACHE_TTL, TimeUnit.SECONDS);
     }
 
-    /** 预取后续章节（异步） */
+    /** 预取前后章节（异步，缓存到 Redis） */
     private void prewarmChapters(Long bookId, Integer fromChapter) {
         CompletableFuture.runAsync(() -> {
+            // 向前预取 5 章
             for (int i = 1; i <= PREWARM_COUNT; i++) {
-                int nextNum = fromChapter + i;
-                String key = CHAPTER_CACHE_PREFIX + bookId + ":" + nextNum;
-                // 已缓存则跳过
-                if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) continue;
-                try {
-                    Chapter next = chapterMapper.selectByBookAndChapter(bookId, nextNum);
-                    if (next != null) {
-                        cacheChapter(next);
-                        log.debug("预取章节缓存: bookId={}, ch={}", bookId, nextNum);
-                    } else {
-                        break; // 无后续章节
-                    }
-                } catch (Exception e) {
-                    log.warn("预取章节失败 bookId={}, ch={}", bookId, nextNum, e);
-                }
+                if (!prewarmSingleChapter(bookId, fromChapter + i)) break;
+            }
+            // 向后预取 5 章
+            for (int i = 1; i <= PREWARM_COUNT; i++) {
+                if (fromChapter - i < 1) break;
+                prewarmSingleChapter(bookId, fromChapter - i);
             }
         });
+    }
+
+    private boolean prewarmSingleChapter(Long bookId, int chapterNum) {
+        String key = CHAPTER_CACHE_PREFIX + bookId + ":" + chapterNum;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) return true;
+        try {
+            Chapter ch = chapterMapper.selectByBookAndChapter(bookId, chapterNum);
+            if (ch != null) {
+                cacheChapter(ch);
+                log.debug("预取章节缓存: bookId={}, ch={}", bookId, chapterNum);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("预取章节失败 bookId={}, ch={}", bookId, chapterNum, e);
+        }
+        return false;
     }
 
     /**
@@ -175,9 +183,9 @@ public class ReaderService {
         // 同时写入百分比键，供首页 BookService.fillBookStats 读取
         redisTemplate.opsForValue().set(pctKey, progressPercent, 7, TimeUnit.DAYS);
 
-        // 持久化到 MySQL（book.read_progress），跨设备同步
+        // 持久化到 MySQL（reading_progress），跨设备同步
         try {
-            bookMapper.updateReadProgress(bookId, progressPercent);
+            bookMapper.updateReadingProgress(bookId, progressPercent);
         } catch (Exception e) {
             log.warn("持久化阅读进度到 MySQL 失败 bookId={}", bookId, e);
         }

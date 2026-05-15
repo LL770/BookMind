@@ -396,11 +396,14 @@ const renderGraph = async () => {
       lineStyle: { color: '#A08970', curveness, width: 2.5, cap: 'round', opacity: 0.7 },
       label: labelText && showEdgeLabels.value ? {
         show: true,
-        position: 'start',
-        distance: 5,
+        position: idx % 2 === 0 ? 'start' : 'end',
+        distance: 80,
         formatter: labelText,
-        fontSize: 9,
-        color: "#6B5B4E",
+        fontSize: 10,
+        color: "#5C4E3E",
+        backgroundColor: "rgba(245,240,232,0.85)",
+        padding: [1, 6],
+        borderRadius: 3,
       } : { show: false },
     }
   })
@@ -414,9 +417,10 @@ const renderGraph = async () => {
             <div class="text-sm text-slate-500">${nodeTypeLabels[params.data.category] || params.data.category}</div>
             ${params.data.description ? `<div class="text-sm mt-1">${params.data.description}</div>` : ''}`
         }
-        const sName = nodeNameMap[edge.source] || edge.source
-        const tName = nodeNameMap[edge.target] || edge.target
-        const fullLabel = edge.id || ''
+        const d = params.data
+        const sName = nodeNameMap[d.source] || d.source
+        const tName = nodeNameMap[d.target] || d.target
+        const fullLabel = d.id || ''
         return `<div>${sName} → ${tName}</div>${fullLabel ? `<div class="text-xs text-slate-400 mt-1">${fullLabel}</div>` : ''}`
       },
     },

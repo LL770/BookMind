@@ -332,8 +332,11 @@ export const useCategoryStore = defineStore('category', () => {
     lastLoad = now
     try {
       const r = await categoryAPI.getAll()
-      list.value = (r.data || []).map(c => ({ id: c.id, label: c.name, emoji: c.emoji, builtin: c.builtin === 1 }))
-      rev.value++
+      const data = r.data
+      if (data && data.length > 0) {
+        list.value = data.map(c => ({ id: c.id, label: c.name, emoji: c.emoji, builtin: c.builtin === 1 }))
+        rev.value++
+      }
     } catch (e) { /* 静默 */ }
   }
 

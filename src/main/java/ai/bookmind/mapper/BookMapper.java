@@ -53,8 +53,8 @@ public interface BookMapper {
     @Delete("DELETE FROM book WHERE id = #{id}")
     int deleteById(@Param("id") Long id);
 
-    @Update("UPDATE book SET progress = #{readProgress} WHERE id = #{id}")
-    int updateReadProgress(@Param("id") Long id, @Param("readProgress") Integer readProgress);
+    @Update("UPDATE book SET reading_progress = #{progress} WHERE id = #{id}")
+    int updateReadingProgress(@Param("id") Long id, @Param("progress") Integer progress);
 
     @Select("SELECT * FROM book WHERE user_id = #{userId} AND (title LIKE CONCAT('%', #{keyword}, '%') OR author LIKE CONCAT('%', #{keyword}, '%')) ORDER BY create_time DESC")
     List<Book> searchByUserId(@Param("userId") Long userId, @Param("keyword") String keyword);

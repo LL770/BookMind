@@ -66,19 +66,19 @@ public class ReaderController {
 
         Map<String, Object> data = new HashMap<>();
         data.put("chapter", chapter);
-        // 附带总章节数：优先查 chapter 表，其次 Book.totalPages 兜底
+        // 总章节数：优先 Book.totalPages（一次查询），其次 count 兜底
         int totalChaptersCount = 0;
         try {
-            List<Chapter> allCh = chapterMapper.selectByBookId(bookId);
-            totalChaptersCount = allCh != null ? allCh.size() : 0;
-        } catch (Exception e) {
-            log.warn("查询总章节数失败 bookId={}", bookId, e);
-        }
+            ai.bookmind.entity.Book b = bookMapper.selectById(bookId);
+            if (b != null && b.getTotalPages() != null) totalChaptersCount = b.getTotalPages();
+        } catch (Exception e) { /* 忽略 */ }
         if (totalChaptersCount == 0) {
             try {
-                ai.bookmind.entity.Book b = bookMapper.selectById(bookId);
-                if (b != null && b.getTotalPages() != null) totalChaptersCount = b.getTotalPages();
-            } catch (Exception e) { /* 忽略 */ }
+                List<Chapter> allCh = chapterMapper.selectByBookId(bookId);
+                totalChaptersCount = allCh != null ? allCh.size() : 0;
+            } catch (Exception e) {
+                log.warn("查询总章节数失败 bookId={}", bookId, e);
+            }
         }
         data.put("totalChapters", totalChaptersCount);
         return Result.success(data);

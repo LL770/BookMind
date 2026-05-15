@@ -524,10 +524,6 @@ function saveReadProgress(force) {
   if (!force && !hasScrolled && scrollPercent.value === 0) return Promise.resolve()
   updateScrollPercent()
   let overallPos = (currentChapterNumber.value - 1) + (scrollPercent.value / 100)
-  // 单章书：内容可见即视为已读
-  if ((totalChapters.value || _persistedTotal) === 1 && chapter.value) {
-    overallPos = 1.0
-  }
   return axios.put(`/api/reader/${props.bookId}/progress`, {}, {
     params: {
       chapterNumber: currentChapterNumber.value,

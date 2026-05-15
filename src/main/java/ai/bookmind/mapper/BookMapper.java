@@ -59,6 +59,9 @@ public interface BookMapper {
     @Update("UPDATE book SET current_page = #{currentPage} WHERE id = #{id}")
     int updateCurrentPage(@Param("id") Long id, @Param("currentPage") Double currentPage);
 
+    @Update("UPDATE book SET current_chapter = #{chapterNumber} WHERE id = #{id}")
+    int updateCurrentChapter(@Param("id") Long id, @Param("chapterNumber") Integer chapterNumber);
+
     @Update("UPDATE book SET kg_generated = #{generated} WHERE id = #{id}")
     int updateKgGenerated(@Param("id") Long id, @Param("generated") Integer generated);
 

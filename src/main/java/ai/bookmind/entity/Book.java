@@ -59,6 +59,9 @@ public class Book {
     /** 阅读进度 0-100（持久化字段，供 Redis 兜底） */
     private Integer readingProgress;
 
+    /** 当前阅读章节号 */
+    private Integer currentChapter;
+
     /** 当前阅读位置：复合值 (章节号-1) + (滚动百分比/100) */
     private Double currentPage;
 

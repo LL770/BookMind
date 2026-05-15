@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS `book` (
     `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态: 0-上传中 1-解析中 2-向量化中 3-已完成 4-失败',
     `progress` INT DEFAULT 0 COMMENT '处理进度(0-100)',
     `reading_progress` INT DEFAULT 0 COMMENT '阅读进度百分比(0-100)',
+    `current_chapter` INT DEFAULT 1 COMMENT '当前阅读章节号',
     `current_page` DECIMAL(10,2) DEFAULT 0.00 COMMENT '当前阅读位置: (章节号-1)+(章内滚动百分比/100)',
     `kg_generated` TINYINT NOT NULL DEFAULT 0 COMMENT '知识图谱已生成: 0-否 1-是',
     `process_message` VARCHAR(500) DEFAULT NULL COMMENT '处理描述',

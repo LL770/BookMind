@@ -43,6 +43,15 @@ export default defineConfig({
         drop_debugger: true,
       },
     },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          echarts: ['echarts', 'vue-echarts'],
+          marked: ['marked'],
+          vendor: ['vue', 'vue-router', 'pinia', 'axios'],
+        },
+      },
+    },
   },
 
   css: {

@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -98,11 +99,14 @@ public class BookUploadService {
                     fileSize / (1024.0 * 1024), fileExtension.toUpperCase(), maxSizeMb));
         }
 
+        // 计算文件 SHA256 hash
+        String fileHash = computeSha256(file.getInputStream());
+
         String uniqueFileName = userId + "_" + UUID.randomUUID().toString().replace("-", "") + "." + fileExtension;
         String fileUrl = uploadToMinio(file, uniqueFileName);
-        Book book = insertBookRecord(userId, title, originalFilename, author, category, fileUrl, file.getSize(), fileExtension);
+        Book book = insertBookRecord(userId, title, originalFilename, author, category, fileUrl, file.getSize(), fileExtension, fileHash);
 
-        log.info("书籍上传成功(异步): bookId={}, userId={}, file={}", book.getId(), userId, originalFilename);
+        log.info("书籍上传成功(异步): bookId={}, userId={}, file={}, hash={}", book.getId(), userId, originalFilename, fileHash);
 
         // 发送 MQ 消息，异步处理
         Map<String, Object> msg = new HashMap<>();
@@ -119,11 +123,12 @@ public class BookUploadService {
      */
     @Transactional
     public Book createBookFromMergedFile(Long userId, String fileUrl, String fileName,
-                                          String title, String author, String category, Long fileSize) {
+                                          String title, String author, String category, Long fileSize,
+                                          String fileHash) {
         String fileExtension = getFileExtension(fileName);
-        Book book = insertBookRecord(userId, title, fileName, author, category, fileUrl, fileSize, fileExtension);
+        Book book = insertBookRecord(userId, title, fileName, author, category, fileUrl, fileSize, fileExtension, fileHash);
 
-        log.info("分片上传完成，创建书籍: bookId={}, userId={}, file={}", book.getId(), userId, fileName);
+        log.info("分片上传完成，创建书籍: bookId={}, userId={}, file={}, hash={}", book.getId(), userId, fileName, fileHash);
 
         Map<String, Object> msg = new HashMap<>();
         msg.put("type", "parse");
@@ -136,7 +141,8 @@ public class BookUploadService {
 
     @Transactional
     public Book insertBookRecord(Long userId, String title, String originalFilename, String author,
-                                  String category, String fileUrl, Long fileSize, String fileExtension) {
+                                  String category, String fileUrl, Long fileSize, String fileExtension,
+                                  String fileHash) {
         Book book = new Book();
         book.setUserId(userId);
         book.setTitle(title != null ? title : removeExtension(originalFilename));
@@ -145,6 +151,7 @@ public class BookUploadService {
         book.setFileUrl(fileUrl);
         book.setFileSize(fileSize);
         book.setFormat(fileExtension.toLowerCase());
+        book.setFileHash(fileHash);
         book.setStatus(0);
         book.setProgress(10);
         book.setProcessMessage("文件已上传，等待处理...");
@@ -190,14 +197,32 @@ public class BookUploadService {
         }
     }
 
-    /** 步骤2: 向量化（封面生成提前到向量化之前） */
+    /** 步骤2: 向量化 — 先查同书hash，有则跳过直接复制KG */
     public void processVectorize(Long bookId, Long userId) {
         try {
             log.info("MQ 开始向量化: bookId={}", bookId);
 
+            Book book = bookMapper.selectById(bookId);
+            if (book == null) { log.warn("书籍不存在: bookId={}", bookId); return; }
+
+            // 查同书：相同 file_hash 且已完成处理的书籍
+            if (book.getFileHash() != null && !book.getFileHash().isBlank()) {
+                Book existing = bookMapper.selectByFileHash(book.getFileHash(), bookId);
+                if (existing != null) {
+                    log.info("发现同书，跳过向量化和KG: bookId={}, sourceBookId={}", bookId, existing.getId());
+                    bookMapper.updateStatusProgress(bookId, 2, 66, "检测到同书，直接复制数据...");
+                    knowledgeGraphService.copyGraph(existing.getUserId(), existing.getId(), userId, bookId);
+                    int nc = knowledgeGraphService.countNodes(userId, bookId);
+                    bookMapper.updateStatusProgress(bookId, 3, 100, "全部完成（同书共享）");
+                    bookMapper.updateKgGenerated(bookId, nc > 0 ? 1 : 0);
+                    log.info("同书处理完成: bookId={}, nodes={}", bookId, nc);
+                    return;
+                }
+            }
+
+            // 没有同书：正常向量化
             vectorizationService.vectorizeBook(userId, bookId);
 
-            // 向量化完成 → 用户可AI对话
             bookMapper.updateStatusProgress(bookId, 2, 66, "向量化完成，可使用AI对话");
 
             Map<String, Object> msg = Map.of(
@@ -220,18 +245,15 @@ public class BookUploadService {
             log.info("MQ 开始生成知识图谱: bookId={}", bookId);
             bookMapper.updateStatusProgress(bookId, 2, 66, "知识图谱生成中...");
 
-            // 先尝试传统实体抽取（快速）
-            try {
-                knowledgeGraphService.generateGraph(userId, bookId);
-            } catch (Exception e) {
-                log.warn("传统KG抽取失败，继续生成信息图: {}", e.getMessage());
-            }
+            boolean kgOk = knowledgeGraphService.generateGraph(userId, bookId);
+            bookMapper.updateKgGenerated(bookId, kgOk ? 1 : 0);
 
             bookMapper.updateStatusProgress(bookId, 3, 100, "全部完成，可使用知识图谱");
             log.info("书籍全部处理完成: bookId={}", bookId);
 
         } catch (Throwable e) {
             log.warn("知识图谱生成失败(不影响阅读和对话): bookId={}", bookId, e);
+            bookMapper.updateKgGenerated(bookId, 0);
             bookMapper.updateStatusProgress(bookId, 3, 100, "处理完成（知识图谱生成失败）");
         }
     }
@@ -833,6 +855,29 @@ public class BookUploadService {
         parser.parse(inputStream, handler, metadata, context);
 
         return handler.toString();
+    }
+
+    // ======================== SHA256 工具 ========================
+
+    private String computeSha256(InputStream is) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                md.update(buf, 0, n);
+            }
+            return bytesToHex(md.digest());
+        } catch (Exception e) {
+            log.warn("计算SHA256失败", e);
+            return null;
+        }
+    }
+
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     // ======================== 保留兼容 MQ 路径（外部调用）===================

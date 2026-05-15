@@ -414,7 +414,7 @@ async function loadChapter() {
 // 监听页码变化 → 重新加载（组件不销毁时页码更新触发）
 watch(() => props.chapterNumber, (newVal, oldVal) => {
   if (newVal && newVal !== oldVal) {
-    saveReadProgress()
+    if (oldVal) saveReadProgress(true)
     loadChapter()
   }
 })
@@ -465,7 +465,7 @@ function jumpToPage() {
   // 边界限制：超上限→最后页，小于1→第一页
   page = Math.max(1, Math.min(page, totalChapters.value))
   if (page === currentChapterNumber.value) { pageJumpInput.value = ''; return }
-  saveReadProgress()
+  saveReadProgress(true)
   router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: page } })
   pageJumpInput.value = ''
 }
@@ -478,11 +478,16 @@ const hasNext = computed(() => currentChapterNumber.value < totalChapters.value)
 
 const scrollPercent = ref(0)
 let scrollSaveTimer = null
+let hasScrolled = false
 function updateScrollPercent() {
   const el = contentRef.value
   if (!el) return
-  const pct = el.scrollTop / (el.scrollHeight - el.clientHeight)
+  const winScroll = window.scrollY || window.pageYOffset || 0
+  const winHeight = window.innerHeight || document.documentElement.clientHeight
+  const docHeight = document.documentElement.scrollHeight
+  const pct = (winScroll + winHeight) / docHeight
   scrollPercent.value = isFinite(pct) ? Math.min(100, Math.max(0, Math.round(pct * 100))) : 0
+  if (scrollPercent.value > 0) hasScrolled = true
   // 停止滚动 3 秒后自动保存进度
   if (scrollSaveTimer) clearTimeout(scrollSaveTimer)
   scrollSaveTimer = setTimeout(saveReadProgress, 3000)
@@ -512,9 +517,11 @@ const paragraphs = computed(() => {
 // ========== 阅读进度持久化 ==========
 
 let saveTimer = null
-function saveReadProgress() {
+function saveReadProgress(force) {
   if (!props.bookId || !currentChapterNumber.value) return Promise.resolve()
   if (!totalChapters.value && !_persistedTotal) return Promise.resolve()
+  // 用户从未滚动时，不覆盖已有进度（防止 auto-save 以 scroll=0 冲掉正确值）
+  if (!force && !hasScrolled && scrollPercent.value === 0) return Promise.resolve()
   updateScrollPercent()
   let overallPos = (currentChapterNumber.value - 1) + (scrollPercent.value / 100)
   // 单章书：内容可见即视为已读
@@ -543,22 +550,20 @@ const chapterCache = new Map()
 const chapterListCache = new Map()
 
 function restoreScrollPosition() {
-  const el = contentRef.value
-  if (!el) return
   axios.get(`/api/reader/${props.bookId}/progress`, {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
   }).then(res => {
     if (res.data?.code !== 0 || !res.data?.data) return
     const savedCh = res.data.data.chapterNumber || 1
-    if (savedCh !== props.chapterNumber) return  // 仅当同一章才恢复
+    if (savedCh !== props.chapterNumber) return
     const overallPos = res.data.data.currentPage || 0
     const scrollInChapter = Math.max(0, overallPos - (savedCh - 1))
     if (scrollInChapter <= 0) return
-    // 等下一帧让浏览器完成布局
     requestAnimationFrame(() => {
-      const e2 = contentRef.value
-      if (!e2 || e2.scrollHeight <= e2.clientHeight) return
-      e2.scrollTop = scrollInChapter * (e2.scrollHeight - e2.clientHeight)
+      const docHeight = document.documentElement.scrollHeight
+      const winHeight = window.innerHeight
+      if (docHeight <= winHeight) return
+      window.scrollTo(0, Math.max(0, scrollInChapter * docHeight - winHeight))
     })
   }).catch(() => {})
 }
@@ -613,7 +618,7 @@ async function goToPrev() {
     const prevCh = currentChapterNumber.value - 1
     const cacheKey = props.bookId + ':' + prevCh
     if (!chapterCache.has(cacheKey)) await preloadChapter(prevCh)
-    saveReadProgress()
+    saveReadProgress(true)
     await router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: prevCh } })
   } finally { navLock = false }
 }
@@ -624,13 +629,13 @@ async function goToNext() {
     const nextCh = currentChapterNumber.value + 1
     const cacheKey = props.bookId + ':' + nextCh
     if (!chapterCache.has(cacheKey)) await preloadChapter(nextCh)
-    saveReadProgress()
+    saveReadProgress(true)
     await router.push({ name: 'reader-chapter', params: { bookId: props.bookId, chapterNumber: nextCh } })
   } finally { navLock = false }
 }
 
 function goHome() {
-  saveReadProgress()
+  saveReadProgress(true)
   router.push({ name: 'home' })
 }
 function handleParaClick(idx) {
@@ -666,7 +671,7 @@ function openChatPanel() {
 function jumpToNote(note) {
   const page = chapterMap.value[note.chapterId]
   if (page) {
-    saveReadProgress()
+    saveReadProgress(true)
     router.push({
       name: 'reader-chapter',
       params: { bookId: props.bookId, chapterNumber: page },
@@ -746,9 +751,8 @@ onMounted(() => {
   loadChapter()
   startAutoSave()          // 阅读中每 5s 自动存进度
   window.addEventListener('keydown', onKeyDown)
-  // 滚动监听更新进度
-  const contentEl = contentRef.value
-  if (contentEl) contentEl.addEventListener('scroll', updateScrollPercent, { passive: true })
+  // 滚动监听更新进度（页面级滚动）
+  window.addEventListener('scroll', updateScrollPercent, { passive: true })
   document.addEventListener('mouseup', onClickOutside)
   document.documentElement.classList.add('reader-active')
   document.addEventListener('fullscreenchange', onFullscreenChange)
@@ -778,8 +782,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('mouseup', onClickOutside)
   document.removeEventListener('fullscreenchange', onFullscreenChange)
-  const contentEl = contentRef.value
-  if (contentEl) contentEl.removeEventListener('scroll', updateScrollPercent)
+  window.removeEventListener('scroll', updateScrollPercent)
   document.documentElement.classList.remove('reader-active')
   if (document.fullscreenElement) document.exitFullscreen()
 })

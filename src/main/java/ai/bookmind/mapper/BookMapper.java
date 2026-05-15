@@ -13,9 +13,9 @@ public interface BookMapper {
 
     @Insert("""
         INSERT INTO book (user_id, title, author, category, cover_url, file_url,
-                         file_size, format, total_pages, total_words, status, progress, process_message)
+                         file_size, format, file_hash, total_pages, total_words, status, progress, process_message)
         VALUES (#{userId}, #{title}, #{author}, #{category}, #{coverUrl}, #{fileUrl},
-                #{fileSize}, #{format}, #{totalPages}, #{totalWords}, #{status}, #{progress}, #{processMessage})
+                #{fileSize}, #{format}, #{fileHash}, #{totalPages}, #{totalWords}, #{status}, #{progress}, #{processMessage})
     """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Book book);
@@ -56,9 +56,18 @@ public interface BookMapper {
     @Update("UPDATE book SET reading_progress = #{progress} WHERE id = #{id}")
     int updateReadingProgress(@Param("id") Long id, @Param("progress") Integer progress);
 
+    @Update("UPDATE book SET current_page = #{currentPage} WHERE id = #{id}")
+    int updateCurrentPage(@Param("id") Long id, @Param("currentPage") Double currentPage);
+
+    @Update("UPDATE book SET kg_generated = #{generated} WHERE id = #{id}")
+    int updateKgGenerated(@Param("id") Long id, @Param("generated") Integer generated);
+
     @Select("SELECT * FROM book WHERE user_id = #{userId} AND (title LIKE CONCAT('%', #{keyword}, '%') OR author LIKE CONCAT('%', #{keyword}, '%')) ORDER BY create_time DESC")
     List<Book> searchByUserId(@Param("userId") Long userId, @Param("keyword") String keyword);
 
     @Select("SELECT * FROM book WHERE status = #{status} ORDER BY create_time DESC")
     List<Book> selectByStatus(@Param("status") Integer status);
+
+    @Select("SELECT id, user_id FROM book WHERE file_hash = #{fileHash} AND status >= 2 AND id != #{excludeId} LIMIT 1")
+    Book selectByFileHash(@Param("fileHash") String fileHash, @Param("excludeId") Long excludeId);
 }

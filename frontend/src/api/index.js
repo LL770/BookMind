@@ -321,6 +321,16 @@ export const graphAPI = {
   getNodeLocation(bookId, nodeId) {
     return request.get(`/graph/${bookId}/node/${nodeId}/location`)
   },
+
+  // 手动触发知识图谱生成（异步）
+  generateGraph(bookId) {
+    return request.post(`/graph/${bookId}/generate`)
+  },
+
+  // 获取知识图谱状态
+  getGraphStatus(bookId) {
+    return request.get(`/graph/${bookId}/status`)
+  },
 }
 
 /**

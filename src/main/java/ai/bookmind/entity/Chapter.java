@@ -27,15 +27,6 @@ public class Chapter {
     /** 章节内容（文本） */
     private String content;
 
-    /** 内容向量ID（Qdrant中的vectorId） */
-    private String vectorId;
-
-    /** 起始位置（字符偏移） */
-    private Integer startOffset;
-
-    /** 结束位置（字符偏移） */
-    private Integer endOffset;
-
     /** 创建时间 */
     private java.time.LocalDateTime createTime;
 }

@@ -89,7 +89,8 @@ public class UploadSessionController {
             // 创建书籍并触发 MQ 异步处理
             Book book = bookUploadService.createBookFromMergedFile(
                     userId, fileUrl, session.getFileName(),
-                    title, author, category, session.getFileSize());
+                    title, author, category, session.getFileSize(),
+                    null); // TODO: 分片上传计算文件 hash
 
             // 更新 upload_session 关联
             uploadSessionService.getSession(uploadId); // refresh

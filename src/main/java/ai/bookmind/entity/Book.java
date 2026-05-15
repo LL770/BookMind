@@ -41,6 +41,9 @@ public class Book {
     /** 文件格式：pdf/docx/txt/epub */
     private String format;
 
+    /** 文件SHA256 hash，用于同书识别共享向量库和知识图谱 */
+    private String fileHash;
+
     /** 总页数 */
     private Integer totalPages;
 
@@ -55,6 +58,12 @@ public class Book {
 
     /** 阅读进度 0-100（持久化字段，供 Redis 兜底） */
     private Integer readingProgress;
+
+    /** 当前阅读位置：复合值 (章节号-1) + (滚动百分比/100) */
+    private Double currentPage;
+
+    /** 知识图谱是否已生成 0-未生成 1-已生成 */
+    private Integer kgGenerated;
 
     /** 处理描述 */
     private String processMessage;

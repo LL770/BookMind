@@ -101,14 +101,14 @@ public class KnowledgeGraphService {
     // ==================== 核心图谱生成 ====================
 
     @Transactional(rollbackFor = Exception.class)
-    public void generateGraph(Long userId, Long bookId) {
+    public boolean generateGraph(Long userId, Long bookId) {
         try {
             List<ChapterInfo> chapters = chapterMapper.selectByBookId(bookId).stream()
                     .map(c -> new ChapterInfo(c.getChapterNumber(), c.getTitle(),
                             c.getContent() != null ? c.getContent() : ""))
                     .filter(c -> !c.content.isBlank())
                     .collect(Collectors.toList());
-            if (chapters.isEmpty()) { log.warn("无章节内容，跳过: bookId={}", bookId); return; }
+            if (chapters.isEmpty()) { log.warn("无章节内容，跳过: bookId={}", bookId); return false; }
             // 限制最多处理 300 章（防超大书）
             if (chapters.size() > 300) {
                 log.info("章节过多({}), 截取前 300 章: bookId={}", chapters.size(), bookId);
@@ -117,7 +117,7 @@ public class KnowledgeGraphService {
 
             // 每章截取前 CHARS_PER_CHAPTER 字，分组分批
             List<String> batches = buildBatches(chapters);
-            if (batches.isEmpty()) return;
+            if (batches.isEmpty()) return false;
 
             // 分批并行处理：偶数批→flash-lite，奇数批→deepseek-v4-flash
             Map<String, KnowledgeNode> allNodes = new ConcurrentHashMap<>();
@@ -137,7 +137,7 @@ public class KnowledgeGraphService {
             }
             CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0])).join();
 
-            if (allNodes.isEmpty()) { log.warn("AI未提取到实体: bookId={}", bookId); return; }
+            if (allNodes.isEmpty()) { log.warn("AI未提取到实体: bookId={}", bookId); return false; }
 
             // 落库
             deleteGraph(userId, bookId);
@@ -161,9 +161,11 @@ public class KnowledgeGraphService {
                 edgeMapper.insert(e); edgeCount++;
             }
             log.info("知识图谱生成完成: bookId={}, nodes={}, edges={}", bookId, allNodes.size(), edgeCount);
+            return true;
 
         } catch (Exception e) {
             log.error("知识图谱生成失败: bookId={}", bookId, e);
+            return false;
         }
     }
 
@@ -349,6 +351,77 @@ public class KnowledgeGraphService {
         else if (lastBracket >= 0) end = lastBracket + 1;
         if (end > 0) s = s.substring(0, end);
         return s.trim();
+    }
+
+    /**
+     * 统计某本书的知识图谱节点数
+     */
+    public int countNodes(Long userId, Long bookId) {
+        try {
+            var nodes = nodeMapper.selectByBookId(userId, bookId);
+            return nodes != null ? nodes.size() : 0;
+        } catch (Exception e) {
+            log.warn("统计KG节点数失败 bookId={}", bookId, e);
+            return 0;
+        }
+    }
+
+    /**
+     * 复制知识图谱：从源书复制KG数据到目标书（同书共享）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void copyGraph(Long sourceUserId, Long sourceBookId, Long targetUserId, Long targetBookId) {
+        try {
+            var nodes = nodeMapper.selectByBookId(sourceUserId, sourceBookId);
+            if (nodes == null || nodes.isEmpty()) {
+                log.info("源书无KG数据可复制: sourceBookId={}", sourceBookId);
+                return;
+            }
+
+            // 删除目标书旧KG数据
+            deleteGraph(targetUserId, targetBookId);
+
+            // 复制节点
+            Map<Long, Long> oldIdNewIdMap = new HashMap<>();
+            for (KnowledgeNode node : nodes) {
+                KnowledgeNode n = new KnowledgeNode();
+                n.setUserId(targetUserId);
+                n.setBookId(targetBookId);
+                n.setName(node.getName());
+                n.setType(node.getType());
+                n.setDescription(node.getDescription());
+                n.setFirstChapter(node.getFirstChapter());
+                n.setOccurrenceCount(node.getOccurrenceCount());
+                n.setCreateTime(LocalDateTime.now());
+                nodeMapper.insert(n);
+                oldIdNewIdMap.put(node.getId(), n.getId());
+            }
+
+            // 复制边
+            var edges = edgeMapper.selectByBookId(sourceUserId, sourceBookId);
+            if (edges != null) {
+                for (KnowledgeEdge edge : edges) {
+                    Long newSourceId = oldIdNewIdMap.get(edge.getSourceNodeId());
+                    Long newTargetId = oldIdNewIdMap.get(edge.getTargetNodeId());
+                    if (newSourceId == null || newTargetId == null) continue;
+                    KnowledgeEdge e = new KnowledgeEdge();
+                    e.setUserId(targetUserId);
+                    e.setBookId(targetBookId);
+                    e.setSourceNodeId(newSourceId);
+                    e.setTargetNodeId(newTargetId);
+                    e.setRelation(edge.getRelation());
+                    e.setDescription(edge.getDescription());
+                    e.setWeight(edge.getWeight());
+                    e.setCreateTime(LocalDateTime.now());
+                    edgeMapper.insert(e);
+                }
+            }
+
+            log.info("KG复制完成: sourceBookId={}, targetBookId={}, nodes={}", sourceBookId, targetBookId, nodes.size());
+        } catch (Exception e) {
+            log.error("复制知识图谱失败", e);
+            throw new RuntimeException(e);
+        }
     }
 
     // ==================== 内部数据结构 ====================

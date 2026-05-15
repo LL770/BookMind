@@ -7,21 +7,36 @@
       </div>
 
       <div class="max-w-2xl mx-auto">
-        <div v-if="books.length === 0" class="text-center py-16 text-slate-500">
+        <div v-if="loading" class="text-center py-16 text-slate-500">
+          <p class="text-5xl mb-4">⏳</p>
+          <p>加载中...</p>
+        </div>
+        <div v-else-if="books.length === 0" class="text-center py-16 text-slate-500">
           <p class="text-5xl mb-4">📚</p>
           <p>还没有可查看的书籍</p>
           <router-link to="/upload" class="btn btn-primary mt-4" style="background:#8B5E3C;">上传书籍</router-link>
         </div>
         <div v-else class="space-y-3">
-          <div v-for="book in books" :key="book.id" @click="$router.push('/graph/' + book.id)"
-               class="card p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
-               style="border-color:#E8D5C0;">
+          <div v-for="book in books" :key="book.id"
+               class="card p-4 flex items-center gap-4 transition-shadow"
+               :class="book.kgGenerated ? 'cursor-pointer hover:shadow-md' : ''"
+               :style="{borderColor:'#E8D5C0'}"
+               @click="book.kgGenerated ? $router.push('/graph/' + book.id) : null">
             <span class="text-3xl">📖</span>
-            <div class="flex-1">
-              <h3 class="font-medium text-bookmind-dark">{{ book.title }}</h3>
-              <p class="text-sm text-bookmind-secondary">{{ book.author || '未知作者' }} · {{ book.category }}</p>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-bookmind-dark truncate">{{ book.title }}</h3>
+              <p class="text-sm text-bookmind-secondary truncate">{{ book.author || '未知作者' }} · {{ book.category }}</p>
             </div>
-            <span class="text-bookmind-primary">→</span>
+            <template v-if="book.kgGenerated">
+              <span class="text-bookmind-primary flex-shrink-0">→</span>
+            </template>
+            <template v-else>
+              <button v-if="!book._generating" @click.stop="handleGenerate(book)"
+                      class="btn btn-sm flex-shrink-0" style="background:#8B5E3C;color:white;white-space:nowrap;">
+                🔄 生成图谱
+              </button>
+              <span v-else class="text-sm text-bookmind-secondary flex-shrink-0">生成中...</span>
+            </template>
           </div>
         </div>
       </div>
@@ -32,16 +47,45 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useBookStore } from '@/stores'
+import { graphAPI } from '@/api'
 
 const bookStore = useBookStore()
 const books = ref([])
+const loading = ref(true)
 
-onMounted(async () => {
+async function loadBooks() {
+  loading.value = true
   try {
     const data = await bookStore.loadBookList({ page: 1, size: 50 })
     books.value = (data.records || []).filter(b => b.status === 3)
   } catch (e) { console.error(e) }
-})
+  loading.value = false
+}
+
+async function handleGenerate(book) {
+  book._generating = true
+  try {
+    await graphAPI.generateGraph(book.id)
+    // 轮询直到 KG 生成完成
+    const poll = setInterval(async () => {
+      try {
+        const res = await graphAPI.getGraphStatus(book.id)
+        if (res.data && res.data.nodeCount > 0) {
+          book.kgGenerated = 1
+          book._generating = false
+          clearInterval(poll)
+        }
+      } catch (e) { console.error(e) }
+    }, 5000)
+    // 5分钟后超时停止轮询
+    setTimeout(() => { clearInterval(poll); if (book._generating) book._generating = false }, 300000)
+  } catch (e) {
+    console.error('generate KG fail', e)
+    book._generating = false
+  }
+}
+
+onMounted(loadBooks)
 </script>
 
 <style scoped>

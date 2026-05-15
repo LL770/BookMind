@@ -17,3 +17,5 @@ DataLog/
 logs/
 frontend/dist.zip
 frontend/frontend.err
+backend.err
+backend.log

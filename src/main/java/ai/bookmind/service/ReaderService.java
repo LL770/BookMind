@@ -183,9 +183,10 @@ public class ReaderService {
         // 同时写入百分比键，供首页 BookService.fillBookStats 读取
         redisTemplate.opsForValue().set(pctKey, progressPercent, 7, TimeUnit.DAYS);
 
-        // 持久化到 MySQL（reading_progress），跨设备同步
+        // 持久化到 MySQL（reading_progress + current_page），跨设备同步
         try {
             bookMapper.updateReadingProgress(bookId, progressPercent);
+            bookMapper.updateCurrentPage(bookId, currentPage);
         } catch (Exception e) {
             log.warn("持久化阅读进度到 MySQL 失败 bookId={}", bookId, e);
         }
@@ -198,7 +199,7 @@ public class ReaderService {
     }
 
     /**
-     * 获取阅读进度
+     * 获取阅读进度：Redis → MySQL book.current_page 兜底
      */
     public Map<String, Object> getProgress(Long userId, Long bookId) {
         String key = "reading:detail:" + userId + ":" + bookId;
@@ -208,10 +209,27 @@ public class ReaderService {
             return (Map<String, Object>) obj;
         }
 
+        // Redis 未命中，从 MySQL 兜底
+        try {
+            Book book = bookMapper.selectById(bookId);
+            if (book != null && book.getCurrentPage() != null && book.getCurrentPage() > 0) {
+                double compound = book.getCurrentPage();
+                int chapterNum = (int) Math.floor(compound) + 1;
+                Map<String, Object> mysqlProgress = new HashMap<>();
+                mysqlProgress.put("chapterNumber", chapterNum);
+                mysqlProgress.put("currentPage", compound);
+                mysqlProgress.put("progressPercent", book.getReadingProgress() != null ? book.getReadingProgress() : 0);
+                mysqlProgress.put("lastReadTime", 0L);
+                return mysqlProgress;
+            }
+        } catch (Exception e) {
+            log.warn("从MySQL读取阅读进度失败 bookId={}", bookId, e);
+        }
+
         // 默认返回初始进度
         Map<String, Object> defaultProgress = new HashMap<>();
         defaultProgress.put("chapterNumber", 1);
-        defaultProgress.put("currentPage", 1);
+        defaultProgress.put("currentPage", 1.0);
         defaultProgress.put("progressPercent", 0);
         return defaultProgress;
     }

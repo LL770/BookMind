@@ -15,8 +15,8 @@ public interface ChapterMapper {
      * 插入章节
      */
     @Insert("""
-        INSERT INTO chapter (book_id, chapter_number, title, content, vector_id, start_offset, end_offset)
-        VALUES (#{bookId}, #{chapterNumber}, #{title}, #{content}, #{vectorId}, #{startOffset}, #{endOffset})
+        INSERT INTO chapter (book_id, chapter_number, title, content)
+        VALUES (#{bookId}, #{chapterNumber}, #{title}, #{content})
     """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Chapter chapter);
@@ -25,10 +25,10 @@ public interface ChapterMapper {
      * 批量插入章节
      */
     @Insert("""
-        INSERT INTO chapter (book_id, chapter_number, title, content, vector_id, start_offset, end_offset)
+        INSERT INTO chapter (book_id, chapter_number, title, content)
         VALUES
         <foreach collection="chapters" item="chapter" separator=",">
-            (#{chapter.bookId}, #{chapter.chapterNumber}, #{chapter.title}, #{chapter.content}, #{chapter.vectorId}, #{chapter.startOffset}, #{chapter.endOffset})
+            (#{chapter.bookId}, #{chapter.chapterNumber}, #{chapter.title}, #{chapter.content})
         </foreach>
     """)
     int insertBatch(@Param("chapters") List<Chapter> chapters);
@@ -36,26 +36,20 @@ public interface ChapterMapper {
     /**
      * 根据书籍ID查询所有章节
      */
-    @Select("SELECT id, book_id, chapter_number, title, content, vector_id, start_offset, end_offset, create_time FROM chapter WHERE book_id = #{bookId} ORDER BY chapter_number")
+    @Select("SELECT id, book_id, chapter_number, title, content, create_time FROM chapter WHERE book_id = #{bookId} ORDER BY chapter_number")
     List<Chapter> selectByBookId(@Param("bookId") Long bookId);
 
     /**
      * 根据ID查询章节
      */
-    @Select("SELECT * FROM chapter WHERE id = #{id}")
+    @Select("SELECT id, book_id, chapter_number, title, content, create_time FROM chapter WHERE id = #{id}")
     Chapter selectById(@Param("id") Long id);
 
     /**
      * 根据书籍ID和章节号查询
      */
-    @Select("SELECT * FROM chapter WHERE book_id = #{bookId} AND chapter_number = #{chapterNumber}")
+    @Select("SELECT id, book_id, chapter_number, title, content, create_time FROM chapter WHERE book_id = #{bookId} AND chapter_number = #{chapterNumber}")
     Chapter selectByBookAndChapter(@Param("bookId") Long bookId, @Param("chapterNumber") Integer chapterNumber);
-
-    /**
-     * 根据向量ID查询章节
-     */
-    @Select("SELECT * FROM chapter WHERE vector_id = #{vectorId}")
-    Chapter selectByVectorId(@Param("vectorId") String vectorId);
 
     /**
      * 全文搜索章节内容（LIKE，返回完整内容用于 AI 上下文）
@@ -90,8 +84,8 @@ public interface ChapterMapper {
     /**
      * 更新章节内容
      */
-    @Update("UPDATE chapter SET content = #{content}, vector_id = #{vectorId} WHERE id = #{id}")
-    int updateContent(@Param("id") Long id, @Param("content") String content, @Param("vectorId") String vectorId);
+    @Update("UPDATE chapter SET content = #{content} WHERE id = #{id}")
+    int updateContent(@Param("id") Long id, @Param("content") String content);
 
     /**
      * 删除书籍的所有章节

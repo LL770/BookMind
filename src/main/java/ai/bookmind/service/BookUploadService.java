@@ -32,6 +32,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -100,38 +101,6 @@ public class BookUploadService {
         String uniqueFileName = userId + "_" + UUID.randomUUID().toString().replace("-", "") + "." + fileExtension;
         String fileUrl = uploadToMinio(file, uniqueFileName);
         Book book = insertBookRecord(userId, title, originalFilename, author, category, fileUrl, file.getSize(), fileExtension);
-
-        // 上传后立即生成封面，让卡片立刻有图（异步生成封面卡片会空白）
-        try {
-            String cleanTitle = book.getTitle().replaceAll("[\\p{P}\\p{S}]", "").trim();
-            String prompt = String.format(
-                    "书籍封面设计，高级大气质感。书名「%s」以精美书法字体或典雅宋体置于画面上方三分之一处，"
-                    + "字体颜色与背景形成高级对比，书名边缘有细腻烫金/描边效果。"
-                    + "下方三分之二区域为抽象意境背景，点缀简约几何线条、书卷墨迹元素或星空光影，"
-                    + "疏密有致，留白考究。整体色调沉稳（深蓝/墨绿/赭石/黑金），"
-                    + "光影层次丰富，纸质纹理质感。画面干净，不出现人物，不出现多余文字或符号。",
-                    cleanTitle);
-            String imageUrl = aiApiClient.generateInfographic(prompt);
-            if (imageUrl != null && imageUrl.startsWith("http")) {
-                try {
-                    byte[] imgBytes = new java.net.URL(imageUrl).openConnection().getInputStream().readAllBytes();
-                    String coverName = "covers/" + userId + "_" + book.getId() + "_" + System.currentTimeMillis() + ".png";
-                    try (var bis = new java.io.ByteArrayInputStream(imgBytes)) {
-                        minioClient.putObject(io.minio.PutObjectArgs.builder()
-                                .bucket(bucketName).object(coverName).stream(bis, imgBytes.length, -1)
-                                .contentType("image/png").build());
-                    }
-                    bookMapper.updateCoverUrl(book.getId(), "/api/files/" + bucketName + "/" + coverName);
-                    log.info("上传阶段封面已生成: bookId={}", book.getId());
-                } catch (Exception e) {
-                    log.warn("上传阶段封面持久化失败，跳过: bookId={}", book.getId(), e);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("上传阶段封面生成失败，异步任务会兜底: bookId={}", book.getId(), e);
-        }
-        // 重新查确保 coverUrl 最新
-        book = bookMapper.selectById(book.getId());
 
         log.info("书籍上传成功(异步): bookId={}, userId={}, file={}", book.getId(), userId, originalFilename);
 
@@ -203,6 +172,9 @@ public class BookUploadService {
             // 解析完成 → 用户可阅读
             bookMapper.updateStatusProgress(bookId, 1, 33, "解析完成，可点击阅读");
 
+            // 异步生成封面，不阻塞向量化消息
+            CompletableFuture.runAsync(() -> generateCover(bookId, userId));
+
             // 发送向量化消息（不阻塞）
             Map<String, Object> msg = Map.of(
                     "type", "vectorize",
@@ -218,10 +190,11 @@ public class BookUploadService {
         }
     }
 
-    /** 步骤2: 向量化 */
+    /** 步骤2: 向量化（封面生成提前到向量化之前） */
     public void processVectorize(Long bookId, Long userId) {
         try {
             log.info("MQ 开始向量化: bookId={}", bookId);
+
             vectorizationService.vectorizeBook(userId, bookId);
 
             // 向量化完成 → 用户可AI对话
@@ -254,41 +227,43 @@ public class BookUploadService {
                 log.warn("传统KG抽取失败，继续生成信息图: {}", e.getMessage());
             }
 
-            // 如上传阶段已生成封面则跳过，否则兜底生成
-            Book book = bookMapper.selectById(bookId);
-            if (book != null && (book.getCoverUrl() == null || book.getCoverUrl().isBlank())) {
-                String cleanTitle = book.getTitle().replaceAll("[\\p{P}\\p{S}]", "").trim();
-                String prompt = String.format(
-                        "书籍封面设计，高级大气质感。书名「%s」以精美书法字体或典雅宋体置于画面上方三分之一处，"
-                        + "字体颜色与背景形成高级对比，书名边缘有细腻烫金/描边效果。"
-                        + "下方三分之二区域为抽象意境背景，点缀简约几何线条、书卷墨迹元素或星空光影，"
-                        + "疏密有致，留白考究。整体色调沉稳（深蓝/墨绿/赭石/黑金），"
-                        + "光影层次丰富，纸质纹理质感。画面干净，不出现人物，不出现多余文字或符号。",
-                        cleanTitle);
-                String imageUrl = aiApiClient.generateInfographic(prompt);
-                if (imageUrl != null && imageUrl.startsWith("http")) {
-                    try {
-                        byte[] imgBytes = new java.net.URL(imageUrl).openConnection().getInputStream().readAllBytes();
-                        String coverName = "covers/" + userId + "_" + bookId + "_" + System.currentTimeMillis() + ".png";
-                        try (var bis = new java.io.ByteArrayInputStream(imgBytes)) {
-                            minioClient.putObject(io.minio.PutObjectArgs.builder()
-                                    .bucket(bucketName).object(coverName).stream(bis, imgBytes.length, -1)
-                                    .contentType("image/png").build());
-                        }
-                        bookMapper.updateCoverUrl(bookId, "/api/files/" + bucketName + "/" + coverName);
-                        log.info("兜底封面已持久化到 MinIO: bookId={}", bookId);
-                    } catch (Exception e) {
-                        log.warn("兜底封面持久化失败: bookId={}", bookId, e);
-                    }
-                }
-            }
-
             bookMapper.updateStatusProgress(bookId, 3, 100, "全部完成，可使用知识图谱");
             log.info("书籍全部处理完成: bookId={}", bookId);
 
         } catch (Throwable e) {
             log.warn("知识图谱生成失败(不影响阅读和对话): bookId={}", bookId, e);
             bookMapper.updateStatusProgress(bookId, 3, 100, "处理完成（知识图谱生成失败）");
+        }
+    }
+
+    // ======================== 封面生成（向量化前执行） ========================
+
+    private void generateCover(Long bookId, Long userId) {
+        try {
+            Book book = bookMapper.selectById(bookId);
+            if (book == null || (book.getCoverUrl() != null && !book.getCoverUrl().isBlank())) return;
+
+            String cleanTitle = book.getTitle().replaceAll("[\\p{P}\\p{S}]", "").trim();
+            String prompt = String.format(
+                    "书籍封面设计，高级大气质感。书名「%s」以精美书法字体或典雅宋体置于画面上方三分之一处，"
+                    + "字体颜色与背景形成高级对比，书名边缘有细腻烫金/描边效果。"
+                    + "下方三分之二区域为抽象意境背景，点缀简约几何线条、书卷墨迹元素或星空光影，"
+                    + "疏密有致，留白考究。整体色调沉稳（深蓝/墨绿/赭石/黑金），"
+                    + "光影层次丰富，纸质纹理质感。画面干净，不出现人物，不出现多余文字或符号。",
+                    cleanTitle);
+            String imageUrl = aiApiClient.generateInfographic(prompt);
+            if (imageUrl != null && imageUrl.startsWith("http")) {
+                String coverName = "covers/" + userId + "_" + bookId + "_" + System.currentTimeMillis() + ".png";
+                try (InputStream in = new java.net.URL(imageUrl).openConnection().getInputStream()) {
+                    minioClient.putObject(io.minio.PutObjectArgs.builder()
+                            .bucket(bucketName).object(coverName).stream(in, -1, 5 * 1024 * 1024)
+                            .contentType("image/png").build());
+                }
+                bookMapper.updateCoverUrl(bookId, "/api/files/" + bucketName + "/" + coverName);
+                log.info("封面已生成: bookId={}", bookId);
+            }
+        } catch (Exception e) {
+            log.warn("封面生成失败(向量化继续): bookId={}", bookId, e);
         }
     }
 

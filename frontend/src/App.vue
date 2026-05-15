@@ -320,7 +320,8 @@ html.dark .app-root { background: var(--bg-cream); }
 .sidebar-icon { width: 18px; height: 18px; flex-shrink: 0; }
 .sidebar-label { opacity: 1; transition: opacity 0.2s; }
 
-/* 阅读/全屏时隐藏侧边栏 */
+/* 阅读/全屏时隐藏侧边栏，并让内容占满宽度 */
+html.reader-active .is-authenticated { grid-template-columns: 1fr; }
 html.reader-active .sidebar { display: none; }
 :fullscreen .sidebar { display: none; }
 

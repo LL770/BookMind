@@ -133,9 +133,18 @@
           <div class="modal-icon" style="font-size:48px">✅</div>
           <h3 class="modal-title">上传成功！</h3>
           <p class="modal-message">书籍已加入处理队列</p>
+          <p class="modal-message" style="margin-top:4px">
+            <span v-if="coverReady">封面：✅ 已生成</span>
+            <span v-else>封面：⏳ 生成中...</span>
+          </p>
           <div class="modal-actions">
             <button @click="goRead" class="modal-btn modal-btn--primary">前往阅读</button>
-            <button @click="doneModal.show = false; $router.push({name:'home'})" class="modal-btn modal-btn--secondary">返回书房</button>
+            <button
+              @click="doneModal.show = false; $router.push({name:'home'})"
+              class="modal-btn modal-btn--secondary"
+              :disabled="!coverReady"
+            >返回书房</button>
+            <span v-if="!coverReady" style="font-size:11px;color:var(--text-muted);margin-left:4px">封面就绪后可返回</span>
           </div>
         </div>
       </div>
@@ -268,6 +277,7 @@ const toast = ref({ show: false, text: '', type: 'success' })
 const useChunked = ref(false)
 const doneChunks = ref(0)
 const totalChunks = ref(0)
+const coverReady = ref(false)
 const chunkProgress = computed(() => {
   if (totalChunks.value === 0) return 0
   return Math.round((doneChunks.value / totalChunks.value) * 100)
@@ -407,6 +417,7 @@ async function handleUpload() {
         uploadStatus.value = p2.value >= 100 ? '解析完成，可点击阅读' :
           (b.processMessage || (step.value === 2 ? '解析文本中...' : '知识图谱生成中...'))
 
+        if (b.coverUrl) { coverReady.value = true }
         if (b.status === 3) {
           clearInterval(pollTimer)
           p1.value = 100; p2.value = 100; p3.value = 100
@@ -454,25 +465,34 @@ async function uploadChunked() {
   totalChunks.value = total
   doneChunks.value = 0
 
-  // 2. 逐分片上传
-  for (let i = 0; i < total; i++) {
-    // 检查分片是否已上传（断点恢复）
-    const statusRes = await uploadAPI.checkChunk(uploadId, i)
-    if (statusRes.data && statusRes.data.uploaded) {
-      doneChunks.value = i + 1
-      continue
+  // 2. 并发上传分片（4 个 worker 抢占式）
+  const CONCURRENCY = 4
+  let nextIdx = 0
+
+  async function worker() {
+    while (nextIdx < total) {
+      const i = nextIdx++
+
+      // 检查分片是否已上传（断点恢复）
+      const statusRes = await uploadAPI.checkChunk(uploadId, i)
+      if (statusRes.data && statusRes.data.uploaded) {
+        doneChunks.value++
+        continue
+      }
+
+      // 切割分片
+      const start = i * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, file.value.size)
+      const blob = file.value.slice(start, end)
+
+      // 上传
+      await uploadAPI.uploadChunk(uploadId, i, blob)
+      doneChunks.value++
+      uploadStatus.value = `上传分片 ${doneChunks.value}/${total}`
     }
-
-    // 切割分片
-    const start = i * CHUNK_SIZE
-    const end = Math.min(start + CHUNK_SIZE, file.value.size)
-    const blob = file.value.slice(start, end)
-
-    // 上传
-    await uploadAPI.uploadChunk(uploadId, i, blob)
-    doneChunks.value = i + 1
-    uploadStatus.value = `上传分片 ${i + 1}/${total}`
   }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
 
   // 3. 完成上传 → 合并分片并创建书籍
   uploadStatus.value = '合并分片中...'

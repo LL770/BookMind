@@ -2,6 +2,8 @@ package ai.bookmind.service;
 
 import ai.bookmind.entity.UploadSession;
 import ai.bookmind.mapper.UploadSessionMapper;
+import io.minio.ComposeObjectArgs;
+import io.minio.ComposeSource;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
@@ -14,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -90,7 +94,7 @@ public class UploadSessionService {
     }
 
     /**
-     * 合并分片 → 合并到 MinIO 最终文件，清理临时分片
+     * 合并分片 → MinIO 服务端直接合并（ComposeObject），零数据传输，清理临时分片
      */
     @Transactional
     public String mergeChunks(String uploadId) throws Exception {
@@ -101,47 +105,30 @@ public class UploadSessionService {
         session.setStatus(1);
         uploadSessionMapper.updateReceivedChunks(uploadId, session.getReceivedChunks());
 
-        // 使用 MinIO 客户端合并 — 由于 MinIO 无原生合并，用小文件直接改路径写入
-        // 实际场景：compose 或 sdk 扩展，这里使用简单拼接方式
-        // 替代方案：使用临时文件本地合并后重新上传
         String finalPath = "uploads/" + session.getUserId() + "_" + uploadId + "_" + session.getFileName();
 
-        // 用 Java 合并: 依次读取每个分片并写入最终文件
-        java.io.File tempFile = java.io.File.createTempFile("merge_", "_" + uploadId);
-        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile)) {
-            for (int i = 0; i < session.getTotalChunks(); i++) {
-                String chunkPath = "temp/" + uploadId + "/chunk_" + i;
-                try (InputStream in = minioClient.getObject(
-                        io.minio.GetObjectArgs.builder()
-                                .bucket(bucketName)
-                                .object(chunkPath)
-                                .build())) {
-                    byte[] buf = new byte[8192];
-                    int len;
-                    while ((len = in.read(buf)) != -1) {
-                        fos.write(buf, 0, len);
-                    }
-                }
-            }
+        // MinIO 服务端合并所有分片
+        List<ComposeSource> sources = new ArrayList<>();
+        for (int i = 0; i < session.getTotalChunks(); i++) {
+            String chunkPath = "temp/" + uploadId + "/chunk_" + i;
+            sources.add(ComposeSource.builder()
+                    .bucket(bucketName)
+                    .object(chunkPath)
+                    .build());
         }
-
-        // 上传合并后的文件
-        try (InputStream mergedIn = new java.io.FileInputStream(tempFile)) {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(bucketName)
-                            .object(finalPath)
-                            .stream(mergedIn, tempFile.length(), -1)
-                            .build()
-            );
-        }
+        minioClient.composeObject(
+                ComposeObjectArgs.builder()
+                        .bucket(bucketName)
+                        .object(finalPath)
+                        .sources(sources)
+                        .build()
+        );
 
         // 删除临时分片
         cleanupChunks(uploadId, session.getTotalChunks());
-        tempFile.delete();
 
         String fileUrl = "http://localhost:9000/" + bucketName + "/" + finalPath;
-        log.info("分片合并完成: uploadId={}, finalPath={}", uploadId, finalPath);
+        log.info("分片合并完成(ComposeObject): uploadId={}, finalPath={}", uploadId, finalPath);
         return fileUrl;
     }
 

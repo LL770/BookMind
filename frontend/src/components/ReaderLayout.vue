@@ -373,16 +373,14 @@ async function loadChapter() {
 
   if (cached) {
     chapter.value = cached
-    chapterCache.delete(cacheKey)
     pageJumpInput.value = String(props.chapterNumber)
     loading.value = false
     await nextTick()
     if (route.query.para) scrollToParagraph(parseInt(route.query.para))
     else if (route.query.quote) findAndScrollToQuote(route.query.quote)
     else restoreScrollPosition()
-    preloadNextChapter()
+    preloadAdjacentChapters()
     loadAnnotations()
-    // totalChapters 已在上次加载时设置，无需重复请求
     return
   }
 
@@ -408,7 +406,7 @@ async function loadChapter() {
     if (route.query.para) scrollToParagraph(parseInt(route.query.para))
     else if (route.query.quote) findAndScrollToQuote(route.query.quote)
     else restoreScrollPosition()
-    preloadNextChapter()
+    preloadAdjacentChapters()
     loadAnnotations()
   } catch (e) { console.error('加载章节失败', e); loading.value = false }
 }
@@ -558,22 +556,35 @@ function loadReadProgress() {
   }).catch(() => {})
 }
 
-async function preloadNextChapter() {
-  if (!hasNext.value) return
-  const n = currentChapterNumber.value + 1
-  const cacheKey = props.bookId + ':' + n
+const MAX_CACHE = 10
+function trimCache() {
+  if (chapterCache.size > MAX_CACHE) {
+    const keys = [...chapterCache.keys()]
+    for (let i = 0; i < keys.length - MAX_CACHE; i++) chapterCache.delete(keys[i])
+  }
+}
+async function preloadChapter(chapterNum) {
+  const cacheKey = props.bookId + ':' + chapterNum
   if (chapterCache.has(cacheKey)) return
   try {
-    const res = await axios.get(`/api/reader/${props.bookId}/chapter/${n}`, {
+    const res = await axios.get(`/api/reader/${props.bookId}/chapter/${chapterNum}`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     })
     if (res.data?.code === 0 && res.data?.data) {
       const d = res.data.data
-      // 前端缓存只存章节内容，totalChapters 由组件级 ref 维护
       chapterCache.set(cacheKey, d.chapter || d)
+      trimCache()
       if (d.totalChapters !== undefined) totalChapters.value = d.totalChapters
     }
-  } catch (e) { /* 静默失败不影响体验 */ }
+  } catch (e) { /* 静默 */ }
+}
+async function preloadAdjacentChapters() {
+  const n = currentChapterNumber.value
+  if (!hasNext.value) { preloadChapter(n - 1); return }
+  if (!hasPrev.value) { preloadChapter(n + 1); return }
+  // 同时预加载上一页和下一页
+  preloadChapter(n - 1)
+  preloadChapter(n + 1)
 }
 
 // ========== 导航 ==========
@@ -861,7 +872,7 @@ onBeforeUnmount(() => {
   border: none; background: none; cursor: pointer; color: var(--text-muted);
   border-bottom: 2px solid transparent; transition: all 0.2s;
 }
-.sidebar-tab--active { color: var(--accent-terracotta); border-bottom-color: var(--accent-terracotta); }
+.sidebar-tab--active { color: var(--accent-terracotta); }
 .sidebar-body { flex: 1; overflow-y: auto; padding: 12px; }
 .sidebar-list { display: flex; flex-direction: column; gap: 10px; }
 .sidebar-item { padding: 10px; border-radius: 8px; background: var(--bg-cream); }

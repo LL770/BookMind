@@ -166,11 +166,10 @@
           </button>
         </div>
       </div>
-      <div :ref="(el) => setGraphRef(el, 'overlay')" class="graph-container" style="flex:1;min-height:0;">
-        <button v-show="!showToolbar" @click="toggleToolbar" class="tb-show-btn" :title="'显示导航栏'">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M6 5l12 7-12 7"/></svg>
-        </button>
-      </div>
+      <div :ref="(el) => setGraphRef(el, 'overlay')" class="graph-container" style="flex:1;min-height:0;"></div>
+      <button v-show="!showToolbar" @click="toggleToolbar" class="tb-show-btn tb-show-fp" :title="'显示导航栏'">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><path d="M6 5l12 7-12 7"/></svg>
+      </button>
     </div>
   </div>
 </template>
@@ -583,6 +582,7 @@ onUnmounted(() => {
 }
 .tb-show-btn:hover { opacity: 1; color: var(--accent-terracotta); }
 .tb-show-btn svg { width: 14px; height: 14px; }
+.tb-show-fp { position: fixed; top: 8px; left: 8px; z-index: 1001; }
 
 .clip-path-pin {
   clip-path: polygon(50% 0%, 100% 100%, 0% 100%);

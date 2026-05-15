@@ -21,6 +21,9 @@ export const useUserStore = defineStore('user', () => {
       // 保存到 localStorage
       localStorage.setItem('token', token.value)
       localStorage.setItem('user', JSON.stringify(user.value))
+
+      // 重置各 store 数据
+      resetAllStores()
       
       return { success: true }
     } catch (error) {
@@ -40,6 +43,8 @@ export const useUserStore = defineStore('user', () => {
       localStorage.setItem('token', token.value)
       localStorage.setItem('user', JSON.stringify(user.value))
 
+      resetAllStores()
+
       return { success: true }
     } catch (error) {
       return { success: false, message: error.message }
@@ -57,6 +62,7 @@ export const useUserStore = defineStore('user', () => {
       user.value = null
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+      resetAllStores()
     }
   }
 
@@ -67,14 +73,16 @@ export const useUserStore = defineStore('user', () => {
       const res = await authAPI.getCurrentUser()
       user.value = res.data
       localStorage.setItem('user', JSON.stringify(user.value))
+      return true
     } catch (error) {
       // 用户信息失效，清除 token
       logout()
+      return false
     }
   }
 
-  // 初始化：从 localStorage 恢复
-  function init() {
+  // 初始化：从 localStorage 恢复并验证 token
+  async function init() {
     const savedToken = localStorage.getItem('token')
     const savedUser = localStorage.getItem('user')
     
@@ -86,6 +94,13 @@ export const useUserStore = defineStore('user', () => {
         user.value = JSON.parse(savedUser)
       } catch (e) {
         localStorage.removeItem('user')
+      }
+    }
+    // 异步验证 token 是否有效
+    if (savedToken) {
+      const ok = await loadUser()
+      if (!ok) {
+        resetAllStores()
       }
     }
   }
@@ -101,6 +116,17 @@ export const useUserStore = defineStore('user', () => {
     init,
   }
 })
+
+function resetAllStores() {
+  const bookStore = useBookStore()
+  const categoryStore = useCategoryStore()
+  const searchStore = useSearchStore()
+  const chatStore = useChatStore()
+  bookStore.reset()
+  categoryStore.reset()
+  searchStore.clearResults()
+  chatStore.clear()
+}
 
 /**
  * 书籍状态管理
@@ -167,6 +193,12 @@ export const useBookStore = defineStore('book', () => {
     }
   }
 
+  function reset() {
+    bookList.value = []
+    currentBook.value = null
+    loading.value = false
+  }
+
   return {
     bookList,
     currentBook,
@@ -175,6 +207,7 @@ export const useBookStore = defineStore('book', () => {
     loadBook,
     uploadBook,
     deleteBook,
+    reset,
   }
 })
 
@@ -366,5 +399,11 @@ export const useCategoryStore = defineStore('category', () => {
     }
   }
 
-  return { list, rev, load, ep, allEmojis, epNav, epOpen, epRow, epKeydown }
+  function reset() {
+    list.value = []
+    rev.value = 0
+    lastLoad = 0
+  }
+
+  return { list, rev, load, reset, ep, allEmojis, epNav, epOpen, epRow, epKeydown }
 })

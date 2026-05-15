@@ -220,7 +220,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore, useBookStore } from '@/stores'
 import BookCard from '@/components/BookCard.vue'
@@ -540,15 +540,38 @@ onMounted(() => {
       closeSideMenus()
     }
   })
-  let catLoadTimer
-  const debouncedCatLoad = () => {
-    clearTimeout(catLoadTimer)
-    catLoadTimer = setTimeout(() => loadApiCategories(), 500)
+  let refreshTimer
+  const debouncedRefresh = () => {
+    clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(() => { loadApiCategories(); loadBooks() }, 500)
   }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') debouncedCatLoad() })
-  window.addEventListener('focus', debouncedCatLoad)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') debouncedRefresh() })
+  window.addEventListener('focus', debouncedRefresh)
   loadApiCategories()
   loadBooks()
+})
+
+// 书籍处理状态轮询：当有待处理书籍时每 12s 刷新一次
+let statusPollTimer
+watch(allBooks, (books) => {
+  clearInterval(statusPollTimer)
+  const hasProcessing = books.some(b => b.status < 3 && b.status > 0)
+  if (hasProcessing) {
+    statusPollTimer = setInterval(() => {
+      const params = { page: currentPage.value, size: 50 }
+      if (activeCategory.value !== 'all') params.category = activeCategory.value
+      bookStore.loadBookList(params).then(data => {
+        allBooks.value = data.records || []
+        totalPages.value = data.pages || 1
+        const stillProcessing = data.records?.some(b => b.status < 3 && b.status > 0)
+        if (!stillProcessing) clearInterval(statusPollTimer)
+      }).catch(() => {})
+    }, 12000)
+  }
+})
+
+onBeforeUnmount(() => {
+  clearInterval(statusPollTimer)
 })
 </script>
 

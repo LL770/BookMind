@@ -120,8 +120,8 @@ const userAvatar = ref(localStorage.getItem('user_avatar') || '')
 
 const userInitial = computed(() => (userStore.user?.username || 'U')[0].toUpperCase())
 
-onMounted(() => {
-  userStore.init()
+onMounted(async () => {
+  await userStore.init()
   if (localStorage.getItem('dark_mode') === '1') document.documentElement.classList.add('dark')
   window.addEventListener('sidebar-default-changed', (e) => {
     sidebarDefault.value = e.detail

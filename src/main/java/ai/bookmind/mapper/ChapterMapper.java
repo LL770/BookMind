@@ -52,34 +52,16 @@ public interface ChapterMapper {
     Chapter selectByBookAndChapter(@Param("bookId") Long bookId, @Param("chapterNumber") Integer chapterNumber);
 
     /**
-     * 全文搜索章节内容（LIKE，返回完整内容用于 AI 上下文）
-     */
-    @Select("SELECT id, book_id, chapter_number, title, SUBSTRING(content, 1, 500) as content FROM chapter WHERE book_id = #{bookId} AND content LIKE CONCAT('%', #{keyword}, '%') ORDER BY chapter_number LIMIT #{limit}")
-    List<Chapter> searchContent(@Param("bookId") Long bookId, @Param("keyword") String keyword, @Param("limit") int limit);
-
-    /**
-     * 全文搜索章节（返回完整内容，用于 AI RAG 上下文）
-     */
-    @Select("SELECT id, book_id, chapter_number, title, content FROM chapter WHERE book_id = #{bookId} AND content LIKE CONCAT('%', #{keyword}, '%') ORDER BY chapter_number LIMIT #{limit}")
-    List<Chapter> searchContentFull(@Param("bookId") Long bookId, @Param("keyword") String keyword, @Param("limit") int limit);
-
-    /**
      * MySQL FULLTEXT 搜索（走全文索引，比 LIKE 快 10-100 倍）
      */
     @Select("SELECT id, book_id, chapter_number, title, content FROM chapter WHERE book_id = #{bookId} AND MATCH(content) AGAINST(CONCAT('+', REPLACE(#{keyword}, ' ', ' +'), '*') IN BOOLEAN MODE) ORDER BY chapter_number LIMIT #{limit}")
     List<Chapter> searchContentFulltext(@Param("bookId") Long bookId, @Param("keyword") String keyword, @Param("limit") int limit);
 
     /**
-     * 全局 FULLTEXT 搜索所有书籍（走全文索引）
+     * 全局 FULLTEXT 搜索所有书籍
      */
     @Select("SELECT id, book_id, chapter_number, title, SUBSTRING(content, 1, 500) as content FROM chapter WHERE MATCH(content) AGAINST(CONCAT('+', REPLACE(#{keyword}, ' ', ' +'), '*') IN BOOLEAN MODE) ORDER BY book_id, chapter_number LIMIT #{limit}")
     List<Chapter> searchAllContentFulltext(@Param("keyword") String keyword, @Param("limit") int limit);
-
-    /**
-     * 全文搜索所有书籍（LIKE）
-     */
-    @Select("SELECT id, book_id, chapter_number, title, SUBSTRING(content, 1, 500) as content FROM chapter WHERE content LIKE CONCAT('%', #{keyword}, '%') ORDER BY book_id, chapter_number LIMIT #{limit}")
-    List<Chapter> searchAllContent(@Param("keyword") String keyword, @Param("limit") int limit);
 
     /**
      * 更新章节内容

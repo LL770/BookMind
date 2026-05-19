@@ -127,7 +127,7 @@ public class UploadSessionService {
         // 删除临时分片
         cleanupChunks(uploadId, session.getTotalChunks());
 
-        String fileUrl = "http://localhost:9000/" + bucketName + "/" + finalPath;
+        String fileUrl = "/files/" + finalPath;
         log.info("分片合并完成(ComposeObject): uploadId={}, finalPath={}", uploadId, finalPath);
         return fileUrl;
     }

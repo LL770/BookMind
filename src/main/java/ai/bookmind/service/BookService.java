@@ -16,8 +16,10 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 书籍服务实现
@@ -62,9 +64,22 @@ public class BookService {
 
         PageInfo<Book> pageInfo = new PageInfo<>(books);
 
-        // 补充笔记和书签计数
-        for (Book book : books) {
-            fillBookStats(book, userId);
+        // 补充笔记计数（批量查询，1 次代替 N 次）
+        List<Long> bookIds = books.stream().map(Book::getId).collect(Collectors.toList());
+        if (!bookIds.isEmpty()) {
+            List<Map<String, Object>> counts = noteMapper.countByBookIds(bookIds);
+            Map<Long, Integer> countMap = new HashMap<>();
+            counts.forEach(row -> countMap.put(
+                    ((Number) row.get("book_id")).longValue(),
+                    ((Number) row.get("cnt")).intValue()));
+            for (Book book : books) {
+                book.setTotalNotes(countMap.getOrDefault(book.getId(), 0));
+                Integer progress = readingStatsService.getProgress(userId, book.getId());
+                if (progress == null || progress == 0) {
+                    progress = book.getReadingProgress() != null ? book.getReadingProgress() : 0;
+                }
+                book.setReadProgress(progress);
+            }
         }
 
         return PageResult.of(page, size, pageInfo.getTotal(), books);
@@ -117,8 +132,21 @@ public class BookService {
         List<Book> books = bookMapper.searchByUserId(userId, keyword);
         PageInfo<Book> pageInfo = new PageInfo<>(books);
 
-        for (Book book : books) {
-            fillBookStats(book, userId);
+        List<Long> bookIds = books.stream().map(Book::getId).collect(Collectors.toList());
+        if (!bookIds.isEmpty()) {
+            List<Map<String, Object>> counts = noteMapper.countByBookIds(bookIds);
+            Map<Long, Integer> countMap = new HashMap<>();
+            counts.forEach(row -> countMap.put(
+                    ((Number) row.get("book_id")).longValue(),
+                    ((Number) row.get("cnt")).intValue()));
+            for (Book book : books) {
+                book.setTotalNotes(countMap.getOrDefault(book.getId(), 0));
+                Integer progress = readingStatsService.getProgress(userId, book.getId());
+                if (progress == null || progress == 0) {
+                    progress = book.getReadingProgress() != null ? book.getReadingProgress() : 0;
+                }
+                book.setReadProgress(progress);
+            }
         }
 
         return PageResult.of(page, size, pageInfo.getTotal(), books);

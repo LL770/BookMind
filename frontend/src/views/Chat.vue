@@ -89,6 +89,7 @@
                   <p v-else class="stream-placeholder">思考中...</p>
                 </div>
               </div>
+              <div ref="bottomAnchor" style="height:1px"></div>
             </template>
             <div v-else class="chat-welcome">
               <div class="welcome-icon">
@@ -155,7 +156,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookStore, useChatStore } from '@/stores'
 import request from '@/api/request'
@@ -200,6 +201,7 @@ async function doSearch() {
 }
 const inputMessage = ref('')
 const msgContainer = ref(null)
+const bottomAnchor = ref(null)
 const messages = ref([])
 const sessions = ref([])
 const sessionMenu = ref({ show: false, x: 0, y: 0, session: null })
@@ -304,6 +306,7 @@ const switchSession = async (sid) => {
     sessionCache[key] = msgs
     messages.value = msgs
     saveMessages()
+    loadingHistory.value = false
     await nextTick(); scrollToBottom()
   } catch (e) { messages.value = [] }
   loadingHistory.value = false
@@ -492,10 +495,9 @@ function parseThinkingFromContent(content) {
 }
 
 function scrollToBottom(smooth = false) {
-  nextTick(() => {
-    const el = document.querySelector('.chat-scroll')
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
-  })
+  if (bottomAnchor.value) {
+    bottomAnchor.value.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
+  }
 }
 
 onMounted(async () => {
@@ -517,15 +519,24 @@ onMounted(async () => {
   }
   if (messages.value.length === 0) {
     try { localStorage.removeItem('chatBackup') } catch (e) {}
-    if (sessions.value.length > 0) await switchSession(sessions.value[0].sessionId)
+    if (sessions.value.length > 0) {
+      await switchSession(sessions.value[0].sessionId)
+      await nextTick(); scrollToBottom()
+    }
   } else {
-    await nextTick(); scrollToBottom()
+    loadingHistory.value = false
+    await nextTick(); await nextTick(); scrollToBottom()
   }
   loadingHistory.value = false
 
   document.addEventListener('click', closeSessionMenu)
   const sbEl = document.querySelector('.sidebar-history')
   if (sbEl) sbEl.addEventListener('scroll', closeSessionMenu, { passive: true })
+})
+
+onActivated(async () => {
+  await refreshSessions()
+  await nextTick(); scrollToBottom()
 })
 
 onUnmounted(() => {
@@ -539,7 +550,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.chat-page { display: flex; flex: 1; min-height: 0; }
+.chat-page { display: flex; flex: 1; min-height: 0; max-height: 100vh; }
 .chat-container { display: flex; flex: 1; width: 100%; position: relative; }
 .chat-sidebar { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--bg-cream); border-right: 1px solid var(--border-light); transition: width 0.25s, min-width 0.25s; overflow: hidden; height: 100%; position: sticky; top: 0; align-self: flex-start; }
 .chat-sidebar--hidden { width: 0; min-width: 0; border-right: none; }
@@ -609,10 +620,11 @@ html.dark .message--assistant .message-text { box-shadow: 0 1px 3px rgba(0,0,0,0
 .thinking-summary::before { content: '▶'; font-size: 10px; transition: transform 0.2s; display: inline-block; }
 .thinking-details[open] .thinking-summary::before { content: '▼'; }
 .input-area { padding: 16px 20px 20px; border-top: 1px solid var(--border-light); background: var(--bg-cream); flex-shrink: 0; }
-.input-container { display: flex; align-items: center; gap: 8px; background: white; border-radius: 24px; padding: 4px 4px 4px 20px; border: 1.5px solid #DCD0C0; transition: border-color 0.2s; max-width: 760px; margin: 0 auto; }
+.input-container { display: flex; align-items: center; gap: 8px; background: var(--bg-white); border-radius: 24px; padding: 4px 4px 4px 20px; border: 1.5px solid var(--border-light); transition: border-color 0.2s; max-width: 760px; margin: 0 auto; }
 .input-container:focus-within { border-color: var(--accent-terracotta); box-shadow: 0 0 0 3px rgba(198,123,92,0.12); }
-.input-container input { flex: 1; font-size: 14px; padding: 8px 0; }
-.send-btn, .stop-btn { width: 38px; height: 38px; border-radius: 50%; border: none; background: #E8DDD0; color: var(--accent-rose); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; font-size: 16px; }
+.input-container input { flex: 1; font-size: 14px; padding: 8px 0; color: var(--text-primary); }
+.input-container input::placeholder { color: var(--text-muted); }
+.send-btn, .stop-btn { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--border-light); color: var(--accent-rose); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; font-size: 16px; }
 .send-btn:hover { background: var(--accent-terracotta); color: white; }
 .stop-btn:hover { background: var(--accent-rose); color: white; }
 .scroll-to-bottom-btn { position: fixed; bottom: 100px; right: 100px; z-index: 110; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border-light); background: var(--bg-white); box-shadow: var(--shadow-md); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--accent-terracotta); font-size: 18px; transition: all 0.2s; }

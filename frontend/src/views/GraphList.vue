@@ -1,41 +1,41 @@
 <template>
-  <div class="min-h-screen" style="background:#FDF8F0;">
+  <div class="min-h-screen graphlist-page">
     <div class="container-main pb-8">
       <div class="text-center mb-8">
-        <h1 class="text-2xl font-bold text-bookmind-dark mb-2">🕸️ 知识图谱</h1>
-        <p class="text-bookmind-secondary">选择一本书，查看人物关系与实体关联</p>
+        <h1 class="text-2xl font-bold mb-2" style="color:var(--text-primary)">🕸️ 知识图谱</h1>
+        <p style="color:var(--text-secondary)">选择一本书，查看人物关系与实体关联</p>
       </div>
 
       <div class="max-w-2xl mx-auto">
-        <div v-if="loading" class="text-center py-16 text-slate-500">
+        <div v-if="loading" class="text-center py-16" style="color:var(--text-muted)">
           <p class="text-5xl mb-4">⏳</p>
           <p>加载中...</p>
         </div>
-        <div v-else-if="books.length === 0" class="text-center py-16 text-slate-500">
+        <div v-else-if="books.length === 0" class="text-center py-16" style="color:var(--text-muted)">
           <p class="text-5xl mb-4">📚</p>
           <p>还没有可查看的书籍</p>
-          <router-link to="/upload" class="btn btn-primary mt-4" style="background:#8B5E3C;">上传书籍</router-link>
+          <router-link to="/upload" class="btn btn-primary mt-4" style="background:var(--accent-terracotta);">上传书籍</router-link>
         </div>
         <div v-else class="space-y-3">
           <div v-for="book in books" :key="book.id"
                class="card p-4 flex items-center gap-4 transition-shadow"
                :class="book.kgGenerated ? 'cursor-pointer hover:shadow-md' : ''"
-               :style="{borderColor:'#E8D5C0'}"
+               :style="{borderColor:'var(--border-light)'}"
                @click="book.kgGenerated ? $router.push('/graph/' + book.id) : null">
             <span class="text-3xl">📖</span>
             <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-bookmind-dark truncate">{{ book.title }}</h3>
-              <p class="text-sm text-bookmind-secondary truncate">{{ book.author || '未知作者' }} · {{ book.category }}</p>
+              <h3 class="font-medium truncate" style="color:var(--text-primary)">{{ book.title }}</h3>
+              <p class="text-sm truncate" style="color:var(--text-secondary)">{{ book.author || '未知作者' }} · {{ book.category }}</p>
             </div>
             <template v-if="book.kgGenerated">
-              <span class="text-bookmind-primary flex-shrink-0">→</span>
+              <span style="color:var(--accent-terracotta)" class="flex-shrink-0">→</span>
             </template>
             <template v-else>
               <button v-if="!book._generating" @click.stop="handleGenerate(book)"
-                      class="btn btn-sm flex-shrink-0" style="background:#8B5E3C;color:white;white-space:nowrap;">
+                      class="btn btn-sm flex-shrink-0" style="background:var(--accent-terracotta);color:white;white-space:nowrap;">
                 🔄 生成图谱
               </button>
-              <span v-else class="text-sm text-bookmind-secondary flex-shrink-0">生成中...</span>
+              <span v-else class="text-sm flex-shrink-0" style="color:var(--text-secondary)">生成中...</span>
             </template>
           </div>
         </div>
@@ -89,6 +89,7 @@ onMounted(loadBooks)
 </script>
 
 <style scoped>
+.graphlist-page { background: var(--bg-cream); }
 @media (max-width: 768px) {
   .container-main { padding: 16px 12px !important; }
   h1 { font-size: 18px !important; }

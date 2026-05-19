@@ -136,11 +136,12 @@ public class NoteService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void deleteBatch(Long userId, List<Long> noteIds) {
-        for (Long noteId : noteIds) {
-            Note existing = noteMapper.selectById(noteId);
+        if (noteIds == null || noteIds.isEmpty()) return;
+        List<Note> notes = noteMapper.selectBatch(noteIds);
+        for (Note existing : notes) {
             if (existing != null && existing.getUserId().equals(userId)) {
-                noteMapper.deleteById(noteId);
-                vectorizationService.deleteNoteVectors(existing.getBookId(), noteId);
+                noteMapper.deleteById(existing.getId());
+                vectorizationService.deleteNoteVectors(existing.getBookId(), existing.getId());
             }
         }
         log.info("笔记批量删除成功：count={}, userId={}", noteIds.size(), userId);

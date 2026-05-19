@@ -67,7 +67,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function loadUser() {
-    if (!token.value) return
+    if (!token.value) return false
     
     try {
       const res = await authAPI.getCurrentUser()
@@ -75,8 +75,7 @@ export const useUserStore = defineStore('user', () => {
       localStorage.setItem('user', JSON.stringify(user.value))
       return true
     } catch (error) {
-      // 用户信息失效，清除 token
-      logout()
+      // Token 失效：axios 拦截器会处理 401 跳转登录页，这里不清除 token
       return false
     }
   }
@@ -94,13 +93,6 @@ export const useUserStore = defineStore('user', () => {
         user.value = JSON.parse(savedUser)
       } catch (e) {
         localStorage.removeItem('user')
-      }
-    }
-    // 异步验证 token 是否有效
-    if (savedToken) {
-      const ok = await loadUser()
-      if (!ok) {
-        resetAllStores()
       }
     }
   }

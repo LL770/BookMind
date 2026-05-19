@@ -1670,12 +1670,11 @@ public class AiChatService {
     private Long findBookIdByName(Long userId, String bookName) {
         if (bookName == null || bookName.isBlank()) return null;
         String trimmed = bookName.trim();
+        // 先走数据库精确匹配（有索引）
+        Long exact = bookMapper.findIdByUserIdAndTitle(userId, trimmed);
+        if (exact != null) return exact;
+        // 模糊匹配：SQL 不支持 LIKE 前导通配，只拉全量做模糊
         List<Book> books = bookMapper.selectByUserId(userId);
-        // 精确匹配
-        for (Book b : books) {
-            if (trimmed.equals(b.getTitle())) return b.getId();
-        }
-        // 模糊匹配
         for (Book b : books) {
             if (b.getTitle() != null && (b.getTitle().contains(trimmed) || trimmed.contains(b.getTitle()))) return b.getId();
         }

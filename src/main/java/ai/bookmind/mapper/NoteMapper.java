@@ -51,6 +51,10 @@ public interface NoteMapper {
     @Select("SELECT * FROM note WHERE user_id = #{userId} AND category = #{category} ORDER BY create_time DESC")
     List<Note> selectByCategory(@Param("userId") Long userId, @Param("category") String category);
 
+    @Select({"<script>", "SELECT id, book_id, user_id, content FROM note WHERE id IN",
+      "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach>", "</script>"})
+    List<Note> selectBatch(@Param("ids") List<Long> ids);
+
     /**
      * 搜索笔记
      */
@@ -103,6 +107,12 @@ public interface NoteMapper {
      */
     @Select("SELECT COUNT(*) FROM note WHERE book_id = #{bookId}")
     int countByBookId(@Param("bookId") Long bookId);
+
+    @Select({"<script>",
+      "SELECT book_id, COUNT(*) AS cnt FROM note WHERE book_id IN",
+      "<foreach collection='bookIds' item='id' open='(' separator=',' close=')'>#{id}</foreach>",
+      "GROUP BY book_id", "</script>"})
+    List<java.util.Map<String, Object>> countByBookIds(@Param("bookIds") List<Long> bookIds);
 
     /**
      * 统计分类笔记数

@@ -17,5 +17,7 @@ DataLog/
 logs/
 frontend/dist.zip
 frontend/frontend.err
-backend.err
+serve_static.py
+start.bat
+*.err
 backend.log

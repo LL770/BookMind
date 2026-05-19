@@ -306,7 +306,7 @@ public class BookUploadService {
     }
 
     public String getMinioUrl(String fileName) {
-        return "http://localhost:9000/" + bucketName + "/" + fileName;
+        return "/files/" + fileName;
     }
 
     private String getFileExtension(String filename) {

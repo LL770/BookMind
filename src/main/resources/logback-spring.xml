@@ -10,7 +10,7 @@
     <!-- BookMind 操作日志 → 文件 -->
     <appender name="DATALOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>DataLog/用户操作/%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
+            <fileNamePattern>${user.dir}/DataLog/user-actions/%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>30</maxHistory>
             <totalSizeCap>500MB</totalSizeCap>
@@ -23,7 +23,7 @@
     <!-- 后端运行日志 → DataLog/后端/ -->
     <appender name="BACKENDLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>DataLog/后端/%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
+            <fileNamePattern>${user.dir}/DataLog/backend/%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>30</maxHistory>
             <totalSizeCap>500MB</totalSizeCap>

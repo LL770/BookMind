@@ -19,7 +19,9 @@ export default defineConfig({
       '.zreo.top',
       'localhost',
       '127.0.0.1',
-      '*.trycloudflare.com'
+      '*.trycloudflare.com',
+      'x6b479d9.natappfree.cc',  // 允许这个域名
+      '.natappfree.cc'            // 或者允许所有 natappfree.cc 的子域名
     ],
     cors: true,
     strictPort: true,

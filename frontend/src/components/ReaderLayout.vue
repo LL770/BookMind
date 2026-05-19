@@ -233,7 +233,16 @@ const lineHeight = ref(parseFloat(localStorage.getItem('reader_line_height') || 
 const pageWidth = ref(parseInt(localStorage.getItem('reader_page_width') || '720'))
 const readerTheme = ref(localStorage.getItem('reader_theme') || 'cream')
 const readerThemeStyle = computed(() => {
-  const t = readerThemes.find(x => x.id === readerTheme.value)
+  const isDark = document.documentElement.classList.contains('dark')
+  let themeId = readerTheme.value
+  if (isDark && themeId !== 'dark' && themeId !== 'gray') {
+    localStorage.setItem('reader_theme_light', themeId)
+    themeId = 'dark'
+  } else if (!isDark && themeId === 'dark') {
+    const light = localStorage.getItem('reader_theme_light')
+    if (light) themeId = light
+  }
+  const t = readerThemes.find(x => x.id === themeId)
   return t ? {
     '--reader-font-size': fontSize.value + 'px',
     '--reader-line-height': lineHeight.value,
@@ -765,7 +774,14 @@ onMounted(() => {
   if (savedPageWidth) document.documentElement.style.setProperty('--reader-page-width', savedPageWidth + 'px')
   const savedTheme = localStorage.getItem('reader_theme')
   if (savedTheme) {
-    const t = readerThemes.find(x => x.id === savedTheme)
+    const isDark = document.documentElement.classList.contains('dark')
+    let themeId = savedTheme
+    if (isDark && themeId !== 'dark' && themeId !== 'gray') themeId = 'dark'
+    else if (!isDark && themeId === 'dark') {
+      const light = localStorage.getItem('reader_theme_light')
+      if (light) themeId = light
+    }
+    const t = readerThemes.find(x => x.id === themeId)
     if (t) {
       document.documentElement.style.setProperty('--reader-bg', t.bg)
       document.documentElement.style.setProperty('--reader-color', t.color)
@@ -799,13 +815,13 @@ onBeforeUnmount(() => {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px; height: 48px;
   border-bottom: 1px solid var(--border-light);
-  background: rgba(250,246,240,0.95);
+  background: color-mix(in srgb, var(--bg-paper) 95%, transparent);
   backdrop-filter: blur(8px);
   flex-shrink: 0; position: sticky; top: 0; z-index: 50;
 }
 .reader-toolbar--float {
   position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-  background: rgba(250,246,240,0.85);
+  background: color-mix(in srgb, var(--bg-paper) 85%, transparent);
   animation: floatBarIn 0.3s ease;
 }
 @keyframes floatBarIn { from { opacity: 0; transform: translateY(-48px); } to { opacity: 1; transform: translateY(0); } }

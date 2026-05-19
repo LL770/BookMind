@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen" style="background:#FDF8F0;" @contextmenu.prevent>
+  <div class="min-h-screen reader-page" @contextmenu.prevent>
     <!-- 有子路由（正在阅读） → 渲染阅读组件 -->
     <!-- key 仅用 bookId：换页时保持组件存活，全屏状态不丢失 -->
     <router-view v-if="$route.params.chapterNumber"
@@ -11,26 +11,26 @@
     <div v-else class="container-main pt-24 pb-8">
       <div class="max-w-4xl mx-auto">
         <div class="text-center mb-8">
-          <h1 class="text-2xl font-bold text-bookmind-dark mb-2">📖 选择书籍</h1>
-          <p class="text-bookmind-secondary text-sm">点击书籍开始阅读</p>
+          <h1 class="text-2xl font-bold mb-2" style="color:var(--text-primary)">📖 选择书籍</h1>
+          <p class="text-sm" style="color:var(--text-secondary)">点击书籍开始阅读</p>
         </div>
 
         <div v-if="books.length === 0" class="text-center py-16">
           <p class="text-5xl mb-4">📭</p>
-          <p class="text-slate-500 mb-4">暂无已完成的书籍</p>
-          <router-link to="/stats" class="px-5 py-2 rounded-lg text-white text-sm" style="background:#8B5E3C;">阅读统计</router-link>
+          <p style="color:var(--text-muted)" class="mb-4">暂无已完成的书籍</p>
+          <router-link to="/stats" class="px-5 py-2 rounded-lg text-white text-sm" style="background:var(--accent-terracotta);">阅读统计</router-link>
         </div>
 
         <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <div v-for="book in books" :key="book.id"
             @click="openBook(book)"
             class="card p-4 cursor-pointer hover:shadow-md transition-shadow"
-            style="border-color:#E8D5C0;">
-            <div class="aspect-[2/3] rounded-lg mb-3 flex items-center justify-center text-5xl" style="background:#f0e6d3;">
+            :style="{borderColor:'var(--border-light)'}">
+            <div class="aspect-[2/3] rounded-lg mb-3 flex items-center justify-center text-5xl" style="background:var(--bg-cream);">
               📖
             </div>
-            <h3 class="font-semibold text-bookmind-dark truncate text-sm">{{ book.title }}</h3>
-            <p class="text-xs text-bookmind-secondary truncate">{{ book.author || '未知作者' }}</p>
+            <h3 class="font-semibold truncate text-sm" style="color:var(--text-primary)">{{ book.title }}</h3>
+            <p class="text-xs truncate" style="color:var(--text-secondary)">{{ book.author || '未知作者' }}</p>
           </div>
         </div>
       </div>
@@ -74,6 +74,7 @@ const openBook = async (book) => {
 </script>
 
 <style scoped>
+.reader-page { background: var(--bg-cream); }
 @media (max-width: 768px) {
   .container-main { padding: 12px; }
   h1 { font-size: 18px !important; }

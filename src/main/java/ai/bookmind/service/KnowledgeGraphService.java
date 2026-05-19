@@ -43,9 +43,8 @@ public class KnowledgeGraphService {
     // 专用线程池：KG 批次并行调 AI，最多 16 并发
     private final Executor kgExecutor = Executors.newWorkStealingPool(16);
 
-    private static final int CHARS_PER_CHAPTER = 3000;
-    private static final int BATCH_CHAPTERS = 30;
-    private static final int MAX_CHARS_PER_BATCH = 60000;
+    private static final int BATCH_CHAPTERS = 9999;
+    private static final int MAX_CHARS_PER_BATCH = 200000;
 
     // 轮流分配：偶数批用 flash-lite，奇数批用 deepseek-v4-flash
     private static final String MODEL_A = "sensenova-6.7-flash-lite";
@@ -121,7 +120,7 @@ public class KnowledgeGraphService {
 
             // 分批并行处理：偶数批→flash-lite，奇数批→deepseek-v4-flash
             Map<String, KnowledgeNode> allNodes = new ConcurrentHashMap<>();
-            List<RawEdge> allEdges = Collections.synchronizedList(new ArrayList<>());
+            Map<String, RawEdge> allEdgeMap = new ConcurrentHashMap<>();
 
             List<CompletableFuture<Void>> batchFutures = new ArrayList<>();
             for (int i = 0; i < batches.size(); i++) {
@@ -132,7 +131,7 @@ public class KnowledgeGraphService {
                     Thread.currentThread().setName("kg-" + idx);
                     log.info("KG批次 {}/{}: 模型={}, 输入={}字", idx + 1, batches.size(), model, content.length());
                     Map<String, Object> result = callModel(model, buildPrompt(content));
-                    if (result != null) mergeBatchResult(result, allNodes, allEdges);
+                    if (result != null) mergeBatchResult(result, allNodes, allEdgeMap);
                 }, kgExecutor));
             }
             CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0])).join();
@@ -150,14 +149,14 @@ public class KnowledgeGraphService {
             allNodes.values().forEach(n -> nameIdMap.put(n.getName(), n.getId()));
 
             int edgeCount = 0;
-            for (RawEdge re : allEdges) {
+            for (RawEdge re : allEdgeMap.values()) {
                 Long sid = nameIdMap.get(re.source); Long tid = nameIdMap.get(re.target);
                 if (sid == null || tid == null || sid.equals(tid)) continue;
                 KnowledgeEdge e = new KnowledgeEdge();
                 e.setUserId(userId); e.setBookId(bookId);
                 e.setSourceNodeId(sid); e.setTargetNodeId(tid);
                 e.setRelation(re.relation != null ? re.relation : "关联");
-                e.setWeight(1.0); e.setCreateTime(LocalDateTime.now());
+                e.setWeight(re.weight); e.setCreateTime(LocalDateTime.now());
                 edgeMapper.insert(e); edgeCount++;
             }
             log.info("知识图谱生成完成: bookId={}, nodes={}, edges={}", bookId, allNodes.size(), edgeCount);
@@ -174,15 +173,13 @@ public class KnowledgeGraphService {
     private List<String> buildBatches(List<ChapterInfo> chapters) {
         List<String> batches = new ArrayList<>();
         StringBuilder buf = new StringBuilder();
-        int count = 0;
         for (ChapterInfo ch : chapters) {
-            String text = ch.toTruncated(CHARS_PER_CHAPTER);
-            if (text.isEmpty()) continue;
-            if (count >= BATCH_CHAPTERS || buf.length() + text.length() > MAX_CHARS_PER_BATCH) {
-                if (buf.length() > 0) { batches.add(buf.toString().trim()); buf = new StringBuilder(); count = 0; }
+            String text = ch.content;
+            if (text == null || text.isBlank()) continue;
+            if (buf.length() + text.length() + 2 > MAX_CHARS_PER_BATCH) {
+                if (buf.length() > 0) { batches.add(buf.toString().trim()); buf = new StringBuilder(); }
             }
             buf.append(text).append("\n\n");
-            count++;
         }
         if (buf.length() > 0) batches.add(buf.toString().trim());
         return batches;
@@ -228,11 +225,13 @@ public class KnowledgeGraphService {
                    - concept：概念、理论、思想、主题
                    - event：事件、冲突、转折
                    - artifact：作品、物品、技术、工具
-                4. 提取至少8个实体，覆盖核心人物/组织/地点/事件/概念/物品
+                4. 提取至少40个实体，覆盖核心人物/组织/地点/事件/概念/物品
                 5. description 字段说明该实体在书中的角色或意义（10-30字）
                 6. relation 要具体，如"统治了……"比"关联"更好
-                7. 重要关系不超过15条，确保关系中的实体都在nodes中
-                8. 输出必须能被JSON.parse直接解析
+                7. 提取所有重要关系，不限数量，确保每个关系中的实体都在nodes中
+                8. 特别注意追踪核心人物之间的关系演变（如冲突→合作→对立→联盟），分别作为不同关系提取
+                9. 每个实体必须至少参与一条关系，不允许有孤立节点
+                10. 输出必须能被JSON.parse直接解析
 
                 内容：
                 %s""", content);
@@ -241,7 +240,7 @@ public class KnowledgeGraphService {
     // ==================== 结果合并 ====================
 
     @SuppressWarnings("unchecked")
-    private void mergeBatchResult(Map<String, Object> batch, Map<String, KnowledgeNode> nodeMap, List<RawEdge> edges) {
+    private void mergeBatchResult(Map<String, Object> batch, Map<String, KnowledgeNode> nodeMap, Map<String, RawEdge> edgeMap) {
         List<Map<String, Object>> rawNodes = (List<Map<String, Object>>) batch.get("nodes");
         if (rawNodes == null) return;
         for (Map<String, Object> raw : rawNodes) {
@@ -270,7 +269,11 @@ public class KnowledgeGraphService {
                 String s = raw.get("source") != null ? raw.get("source").toString().trim() : null;
                 String t = raw.get("target") != null ? raw.get("target").toString().trim() : null;
                 String r = raw.getOrDefault("relation", "关联").toString();
-                if (s != null && t != null && !s.equals(t)) edges.add(new RawEdge(s, t, r));
+                if (s == null || t == null || s.equals(t)) continue;
+                String pairSrc = s.compareTo(t) <= 0 ? s : t;
+                String pairTgt = pairSrc.equals(s) ? t : s;
+                String key = pairSrc + "::" + pairTgt + "::" + r;
+                edgeMap.merge(key, new RawEdge(s, t, r, 1.0), (old, unused) -> new RawEdge(old.source, old.target, old.relation, old.weight + 1.0));
             }
         }
     }
@@ -433,5 +436,5 @@ public class KnowledgeGraphService {
         }
     }
 
-    private record RawEdge(String source, String target, String relation) {}
+    private record RawEdge(String source, String target, String relation, double weight) {}
 }

@@ -73,4 +73,7 @@ public interface BookMapper {
 
     @Select("SELECT id, user_id FROM book WHERE file_hash = #{fileHash} AND status >= 2 AND id != #{excludeId} LIMIT 1")
     Book selectByFileHash(@Param("fileHash") String fileHash, @Param("excludeId") Long excludeId);
+
+    @Select("SELECT id FROM book WHERE user_id = #{userId} AND title = #{title} LIMIT 1")
+    Long findIdByUserIdAndTitle(@Param("userId") Long userId, @Param("title") String title);
 }

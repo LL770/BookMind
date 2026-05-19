@@ -35,6 +35,7 @@
               </label>
             </div>
             <div class="flex gap-1 ml-auto">
+              <button @click="showSearch = true" class="graph-btn" title="搜索节点">🔍</button>
               <button @click="focusNodeId = null; renderGraph()" v-if="focusNodeId" class="graph-btn" title="显示全部">🔙</button>
               <button @click="isFullPage = !isFullPage" class="graph-btn" :title="isFullPage ? '退出全页' : '全页显示'">
                 <svg v-if="!isFullPage" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
@@ -121,6 +122,50 @@
             <button @click="notesModalVisible = false" class="btn btn-sm mt-3 w-full" style="background:#8B5E3C;color:white;">
               关闭
             </button>
+          </div>
+        </div>
+
+        <!-- 边关系详情弹窗 -->
+        <div v-if="edgeDetail" class="modal-mask" @click.self="edgeDetail = null">
+          <div class="modal-content">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-semibold">💡 关系详情</h3>
+              <button @click="edgeDetail = null" class="p-1 rounded hover:bg-slate-100">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="text-center mb-3" style="color:var(--text-primary);font-size:15px;font-weight:600;">
+              {{ edgeDetail.source }} → {{ edgeDetail.target }}
+            </div>
+            <div class="space-y-1" style="color:var(--text-secondary);font-size:14px;">
+              <div v-for="(rel, i) in edgeDetail.relations" :key="i" class="flex items-center gap-2 px-3 py-1.5 rounded" style="background:var(--bg-cream);">
+                <span class="w-1.5 h-1.5 rounded-full" style="background:var(--accent-terracotta)"></span>
+                {{ rel }}
+              </div>
+            </div>
+            <button @click="edgeDetail = null" class="btn btn-sm mt-3 w-full" style="background:#8B5E3C;color:white;">
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <!-- 搜索弹窗 -->
+        <div v-if="showSearch" class="modal-mask" @click.self="showSearch = false">
+          <div class="modal-content" style="max-width:360px;">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-semibold">🔍 搜索节点</h3>
+              <button @click="showSearch = false" class="p-1 rounded hover:bg-slate-100">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <input v-model="searchQuery" placeholder="输入节点名称..." autofocus
+              style="width:100%;padding:8px 12px;border:1.5px solid var(--border-light);border-radius:8px;font-size:14px;outline:none;background:var(--bg-cream);color:var(--text-primary);box-sizing:border-box;"
+              @keydown.esc="showSearch = false" />
+            <div class="mt-2 text-xs" style="color:var(--text-muted)">输入时图表面板自动过滤匹配节点</div>
           </div>
         </div>
 
@@ -221,9 +266,12 @@ const categoryFilters = [
 ]
 const selectedCategories = ref(new Set(categoryFilters.map(c => c.key)))
 const detailModalVisible = ref(false)
+const edgeDetail = ref(null)
+const searchQuery = ref('')
 const useCurvedLines = ref(true)
 const showEdgeLabels = ref(true)
 const showToolbar = ref(true)
+const showSearch = ref(false)
 
 let chart = null
 let orbitTimer = null
@@ -240,6 +288,7 @@ const nodeTypeLabels = {
 
 // 全页切换时重渲染
 watch(isFullPage, () => nextTick(() => renderGraph()))
+watch(searchQuery, () => renderGraph())
 
 // 加载知识图谱
 onMounted(() => {
@@ -330,6 +379,14 @@ const renderGraph = async () => {
     return visibleIds.has(src) && visibleIds.has(tgt)
   })
 
+  // 模糊搜索名称
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    nodes = nodes.filter(n => (n.name || '').toLowerCase().includes(q))
+    const matchedIds = new Set(nodes.map(n => n.id))
+    links = links.filter(l => matchedIds.has(l.source ?? l.from) && matchedIds.has(l.target ?? l.to))
+  }
+
   // 聚焦模式：只显示选中节点及其直接关联的节点+边
   if (focusNodeId.value) {
     const connectedNodeIds = new Set()
@@ -364,49 +421,43 @@ const renderGraph = async () => {
 
   const hasLinks = links.length > 0
 
-  // 平行连线分散：统计每对节点间的连线数并分配不同曲率
-  const pairMap = {}
+  // 获取 CSS 变量实际颜色值（ECharts 在 Canvas 上渲染，不能直接使用 var(--xxx)）
+  const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || ''
+  const edgeLabelColor = cssVar('--text-secondary') || '#6B5B4E'
+  const edgeLabelBg = cssVar('--bg-white') || '#FAF6F0'
+
+  // 每对节点最多 1 条边，所有关系合并到一条线的标签
+  const pairLabels = {}
   links.forEach(l => {
     const k = [String(l.source || l.from), String(l.target || l.to)].sort().join('::')
-    pairMap[k] = (pairMap[k] || 0) + 1
+    if (!pairLabels[k]) pairLabels[k] = []
+    const txt = l.relation || l.label
+    if (txt) pairLabels[k].push(txt)
   })
-  const pairIdx = {}
-  const edgeLinks = links.map(link => {
-    const src = String(link.source || link.from)
-    const tgt = String(link.target || link.to)
+  // 按权重排序（weight 越高越重要），线粗随 weight 变化
+  const sortedLinks = [...links].sort((a, b) => (b.weight || b.value || 1) - (a.weight || a.value || 1))
+  const edgeLinks = [...new Map(sortedLinks.map(l => {
+    const src = String(l.source || l.from)
+    const tgt = String(l.target || l.to)
     const pairKey = [src, tgt].sort().join('::')
-    if (!pairIdx[pairKey]) pairIdx[pairKey] = 0
-    const idx = pairIdx[pairKey]++
-    const total = pairMap[pairKey]
+    const labels = pairLabels[pairKey] || []
+    const labelText = [...new Set(labels)].join(' / ')
+    const w = l.weight || l.value || 1
 
-    let curveness
-    if (total <= 1) {
-      curveness = useCurvedLines.value ? 0.35 : 0
-    } else {
-      curveness = -0.3 + (idx / (total - 1)) * 0.6
-    }
-
-    const labelText = link.relation || link.label || ''
-
-    return {
+    return [pairKey, {
       source: src,
       target: tgt,
-      value: link.value || 1,
-      id: link.id,
-      lineStyle: { color: '#A08970', curveness, width: 2.5, cap: 'round', opacity: 0.7 },
+      value: w,
+      weight: w,
+      _allLabels: labels,
+      lineStyle: { color: '#A08970', curveness: useCurvedLines.value ? 0.35 : 0, width: Math.min(4, 1.5 + Math.log2(Math.max(w, 1)) * 1.2), cap: 'round', opacity: 0.7 },
       label: labelText && showEdgeLabels.value ? {
         show: true,
-        position: idx % 2 === 0 ? 'start' : 'end',
-        distance: 80,
-        formatter: labelText,
-        fontSize: 10,
-        color: "#5C4E3E",
-        backgroundColor: "rgba(245,240,232,0.85)",
-        padding: [1, 6],
-        borderRadius: 3,
+        position: 'middle',
+        formatter: labelText.length > 30 ? labelText.slice(0, 28) + '…' : labelText,
       } : { show: false },
-    }
-  })
+    }]
+  })).values()]
 
   const option = {
     tooltip: {
@@ -427,6 +478,7 @@ const renderGraph = async () => {
     series: [{
       type: 'graph',
       layout: 'force',
+      draggable: true,
       data: nodeList,
       links: edgeLinks,
       categories: [
@@ -439,21 +491,23 @@ const renderGraph = async () => {
       ],
       roam: true,
       zoom: 0.9,
+      minZoom: 0.1,
+      maxZoom: 10,
       label: {
-        show: true, position: 'right', color: '#475569', fontSize: 12,
+        show: true, position: 'right', color: '#475569', fontSize: 13,
         formatter: (p) => {
           const name = p.data.name || ''
           return name.length > 12 ? name.slice(0, 11) + '…' : name
         },
       },
-      force: { repulsion: 700, edgeLength: 300, layoutAnimation: true, friction: 0.1 },
+      force: { repulsion: 800, edgeLength: [200, 400], layoutAnimation: true, friction: 0.1, gravity: 0.03 },
       emphasis: {
         focus: 'adjacency',
         lineStyle: { width: 4 },
-        label: { show: true, fontSize: 14, fontWeight: 'bold' },
+        label: { show: true, fontSize: 15, fontWeight: 'bold' },
       },
-      edgeLabel: { fontSize: 10, color: "#6B5B4E" },
       lineStyle: { color: 'source', opacity: 0.6 },
+      edgeLabel: { fontSize: 13, color: edgeLabelColor, backgroundColor: edgeLabelBg, padding: [2, 6], borderRadius: 4 },
     }],
   }
 
@@ -466,10 +520,35 @@ const renderGraph = async () => {
       selectedNode.value = params.data
       detailModalVisible.value = true
       loadRelatedNotes(params.data.id)
+    } else if (params.dataType === 'edge') {
+      const sName = nodeNameMap[params.data.source] || params.data.source
+      const tName = nodeNameMap[params.data.target] || params.data.target
+      const allLabels = params.data._allLabels || []
+      const uniqueLabels = [...new Set(allLabels)]
+      edgeDetail.value = {
+        source: sName,
+        target: tName,
+        relations: uniqueLabels.length ? uniqueLabels : [params.data.label?.formatter || '关联'],
+      }
     }
   })
 
   window.addEventListener('resize', handleResize)
+
+  // 缩放时更新字体大小
+  chart.off('georoam')
+  let currentZoom = 0.9
+  chart.on('georoam', () => {
+    try {
+      const opt = chart.getOption()
+      const z = opt?.series?.[0]?.zoom
+      if (z && z !== currentZoom) {
+        currentZoom = z
+        const fs = Math.max(8, Math.min(30, Math.round(13 * z)))
+        chart.setOption({ series: [{ label: { fontSize: fs }, edgeLabel: { fontSize: fs } }] })
+      }
+    } catch (e) {}
+  })
 
   // 力布局稳定后 → 每 3 秒微调斥力，节点持续缓慢浮动
   clearTimeout(orbitTimer)
@@ -549,9 +628,8 @@ onUnmounted(() => {
   color: var(--text-muted); font-size: 14px; z-index: 5; pointer-events: none;
 }
 .graph-toolbar {
-  display: flex; align-items: center;
-  padding: 6px 12px; border-bottom: 1px solid var(--border-light, #e5ddd0);
-  background: var(--bg-white, #faf6f0); gap: 8px;
+  display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: var(--bg-white);
+  border-bottom: 1px solid var(--border-light); flex-wrap: nowrap;
 }
 .graph-btn {
   display: flex; align-items: center; justify-content: center;
@@ -559,7 +637,7 @@ onUnmounted(() => {
   border-radius: 4px; background: transparent; cursor: pointer;
   color: var(--text-muted, #8b7d6b); transition: all 0.15s;
 }
-.graph-btn:hover { background: #f0ebe4; color: #5c4e3e; }
+.graph-btn:hover { background: var(--border-light); color: var(--text-primary); }
 .kg-fullpage-overlay {
   position: fixed; inset: 0; z-index: 1000;
   display: flex; flex-direction: column;
@@ -589,7 +667,7 @@ onUnmounted(() => {
   font-style: italic; margin-bottom: 4px;
 }
 .notes-modal .note-content {
-  font-size: 14px; color: var(--text-main, #3d3229); line-height: 1.5;
+  font-size: 14px; color: var(--text-primary); line-height: 1.5;
 }
 
 /* 工具栏显示按钮 - 工具栏隐藏时出现在卡片左上角 */
